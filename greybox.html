@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kisüsti — greybox v0.1</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#f3eee4}
+  canvas{display:block}
+  .panel{position:fixed;background:rgba(20,16,12,.74);border-radius:10px;padding:12px 16px;line-height:1.45;font-size:17px;text-shadow:0 1px 2px #000}
+  #status{left:18px;top:18px;min-width:280px}
+  #status b{color:#ffd88a;font-weight:600}
+  #status .sub{opacity:.75;font-size:15px}
+  #gyanu{right:18px;top:18px;width:300px}
+  #gyanu .bar{height:14px;background:#2b2722;border-radius:7px;overflow:hidden;margin-top:6px}
+  #gyanu .bar i{display:block;height:100%;width:0;background:#6c3}
+  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff;box-shadow:0 0 3px #000;opacity:.85}
+  #prompt{position:fixed;left:0;right:0;top:calc(50% + 26px);text-align:center;font-size:21px;text-shadow:0 1px 3px #000,0 0 8px #000}
+  #log{position:fixed;left:18px;bottom:46px;width:min(760px,60vw);font-size:17px;text-shadow:0 1px 3px #000,0 0 6px #000}
+  #log div{margin-top:4px;transition:opacity .4s}
+  #help{position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:14px;opacity:.7;text-shadow:0 1px 2px #000}
+  #ust{right:18px;top:50%;transform:translateY(-50%);width:400px;display:none}
+  #ust h3{margin:0 0 8px;font-size:22px;letter-spacing:.06em}
+  #ust .tbar{position:relative;height:24px;background:#2b2722;border-radius:6px;overflow:hidden}
+  #ust .tbar i{position:absolute;left:0;top:0;bottom:0;width:0;background:#4c4}
+  #ust .tbar s{position:absolute;top:0;bottom:0;border-left:2px solid #fff;border-right:2px solid #fff;opacity:.55;text-decoration:none}
+  #ust .keys{margin-top:10px;opacity:.8;font-size:15px}
+  .lbl{position:fixed;transform:translate(-50%,-100%);white-space:pre;text-align:center;font-weight:600;color:#fff;text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;pointer-events:none}
+  #start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(#2a1c12,#0d0907);cursor:pointer;text-align:center}
+  #start h1{font-size:76px;margin:0;letter-spacing:.08em;color:#e8a54a;text-shadow:0 4px 0 #5a2c10}
+  #start .al{font-size:22px;margin:10px 0 28px;opacity:.9}
+  #start .go{font-size:20px;padding:12px 26px;border:2px solid #e8a54a;border-radius:30px}
+  #start .disc{position:absolute;bottom:22px;font-size:14px;opacity:.65;max-width:720px}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<div id="status" class="panel"></div>
+<div id="gyanu" class="panel"><div id="gy-t">GYANÚ 0 / 100</div><div class="bar"><i id="gy-b"></i></div></div>
+<div id="cross"></div>
+<div id="prompt"></div>
+<div id="log"></div>
+<div id="help">WASD mozgás · egér nézés · E használat · T +1 óra · Esc szünet</div>
+<div id="ust" class="panel">
+  <h3>AZ ÜST</h3>
+  <div class="tbar"><s id="ust-band"></s><i id="ust-t"></i></div>
+  <div id="ust-info"></div>
+  <div class="keys">W/S tűz · SPACE vágás · Q tűz kiolt · E vissza</div>
+</div>
+<div id="labels"></div>
+<div id="start">
+  <h1>KISÜSTI</h1>
+  <div class="al">Nagyapád üstje. A falu szomja. A pénzügyőr türelme.</div>
+  <div class="go">Kattints az indításhoz</div>
+  <div class="disc">18+ · SZATÍRA · Kitalált falu, kitalált szereplők. A játék a magyar ivási szokásokat figurázza ki, nem az ivást ajánlja. Az otthoni pálinkafőzést törvény szabályozza.</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { Sim, DRINKS, TYPES, VEVOK, hu, ft } from './sim.js';
+const VEVOK_IDX = nev => Math.max(0, VEVOK.findIndex(v => v.nev === nev));
+
+const Q = new URLSearchParams(location.search);
+const TEST = Q.has('teszt') || navigator.webdriver;
+
+// ================================================================ alap
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: TEST });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const DAY_SKY = new THREE.Color(0xbcd3e8), NIGHT_SKY = new THREE.Color(0x0a0f1e), DUSK = new THREE.Color(0xe7a56d);
+scene.background = DAY_SKY.clone();
+scene.fog = new THREE.Fog(DAY_SKY.clone(), 35, 120);
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 300);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const hemi = new THREE.HemisphereLight(0xdfeaff, 0x5a4a32, 1.0);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 120 });
+sun.shadow.bias = -0.0005;
+scene.add(sun, sun.target);
+const yardLamp = new THREE.PointLight(0xffd59a, 0, 22, 1.4);
+yardLamp.position.set(0, 3.6, -2.6);
+scene.add(yardLamp);
+
+const sim = new Sim(TEST ? 7 : Date.now());
+
+// ================================================================ világépítés
+const colliders = [];   // {x0,x1,z0,z1} — XZ-téglalapok
+const interact = [];    // raycast-célpontok
+const labels = [];      // {el, obj, off}
+
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, ...o });
+function mesh(geo, m, x, y, z, parent = scene) {
+  const me = new THREE.Mesh(geo, m);
+  me.position.set(x, y, z); me.castShadow = true; me.receiveShadow = true;
+  parent.add(me); return me;
+}
+function box(x, y, z, w, h, d, c, solid = true) {
+  const me = mesh(new THREE.BoxGeometry(w, h, d), typeof c === 'number' ? mat(c) : c, x, y, z);
+  if (solid) colliders.push({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 });
+  return me;
+}
+function cyl(x, y, z, r, h, c, parent = scene, seg = 20) { return mesh(new THREE.CylinderGeometry(r, r, h, seg), typeof c === 'number' ? mat(c) : c, x, y, z, parent); }
+function ball(x, y, z, r, c, parent = scene) { return mesh(new THREE.SphereGeometry(r, 20, 14), typeof c === 'number' ? mat(c) : c, x, y, z, parent); }
+function label(obj, text, off = 2, size = 15) {
+  const el = document.createElement('div'); el.className = 'lbl'; el.textContent = text; el.style.fontSize = size + 'px';
+  document.getElementById('labels').appendChild(el);
+  const L = { el, obj, off, size }; labels.push(L); return L;
+}
+function tag(obj, data) { obj.userData = { ...obj.userData, ...data }; obj.traverse(o => { o.userData.root = obj; }); interact.push(obj); return obj; }
+const solidCircle = (x, z, r) => colliders.push({ x0: x - r, x1: x + r, z0: z - r, z1: z + r });
+
+// ---------------------------------------------------------------- modellek (Kenney, CC0 — models/*/License.txt)
+const MODELS = {};
+const gltfLoader = new GLTFLoader();
+const MODEL_LIST = [
+  ...'wall wall-door wall-window-shutters wall-wood wall-wood-window-small roof-gable chimney fence stall-red stall-green tree-crooked tree-high-round lantern cart'.split(' ').map(n => 'fantasy-town-kit/' + n),
+  ...'barrel barrel-open workbench bucket box box-large tool-axe tool-shovel'.split(' ').map(n => 'survival-kit/' + n),
+  'car-kit/sedan', 'food-kit/apple', 'food-kit/pear', 'food-kit/wine-red', 'food-kit/bottle-oil',
+  ...'character-male-a character-male-b character-male-c character-male-e character-female-a character-female-b character-female-c character-female-d'.split(' ').map(n => 'mini-characters/' + n),
+  ...'log_stack tree_oak tree_default tree_fat plant_bush plant_bushLarge grass grass_large flower_redA flower_yellowA'.split(' ').map(n => 'nature-kit/' + n),
+  'furniture-kit/bench', 'furniture-kit/tableCloth',
+];
+await Promise.all(MODEL_LIST.map(async k => { MODELS[k] = await gltfLoader.loadAsync(`./models/${k}.glb`); }));
+// a nature-kit anyagai metallicFactor = 1-gyel érkeznek: környezeti térkép nélkül feketék. Matt, kétoldalas lesz.
+for (const k of MODEL_LIST) MODELS[k].scene.traverse(m => {
+  if (m.isMesh && m.material.metalness >= 0.99 && !m.material.metalnessMap) { m.material.metalness = 0; m.material.roughness = 0.85; m.material.side = THREE.DoubleSide; }
+});
+
+/** Egy modell példánya. s: szám vagy [x,y,z]; shadow: árnyékot vet-e. */
+function prop(key, x, y, z, s = 1, ry = 0, parent = scene, shadow = true) {
+  const src = MODELS[key];
+  const o = src.animations.length ? SkeletonUtils.clone(src.scene) : src.scene.clone(true);
+  if (Array.isArray(s)) o.scale.set(...s); else o.scale.setScalar(s);
+  o.position.set(x, y, z); o.rotation.y = ry;
+  o.traverse(m => { if (m.isMesh) { m.castShadow = shadow; m.receiveShadow = true; } });
+  parent.add(o); return o;
+}
+/** Színezés: a Kenney-paletta textúrája szorozva (a gyümölcsfajták miatt). */
+function tint(o, color) { o.traverse(m => { if (m.isMesh) { m.material = m.material.clone(); m.material.color.set(color); } }); return o; }
+/** Palettacsere: a Kenney-textúra adott színcsoportjának pixeleit kicseréli, a fényerő-árnyalatot megtartja.
+ *  A szorzásos tint() a piros almát csak pirosas-lilára festi; ez valódi lilát (cserepet, meszelést) ad.
+ *  rules: [[pixelpróba(r,g,b), [cél r,g,b], [alap r,g,b]]] — az alapszín fényereje adja a 100%-ot. */
+const recolorCache = new Map();
+function recolor(o, name, rules) {
+  o.traverse(m => {
+    if (!m.isMesh || !m.material.map) return;
+    const key = name + '|' + m.material.uuid;
+    if (!recolorCache.has(key)) {
+      const src = m.material.map, img = src.image;
+      const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+      const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+      const d = cx.getImageData(0, 0, cv.width, cv.height), p = d.data;
+      for (let i = 0; i < p.length; i += 4) {
+        const r = p[i], g = p[i + 1], b = p[i + 2];
+        for (const [test, to, base] of rules) {
+          if (!test(r, g, b)) continue;
+          const k = Math.min(1.35, (r + g + b) / (base[0] + base[1] + base[2]));
+          p[i] = Math.min(255, to[0] * k); p[i + 1] = Math.min(255, to[1] * k); p[i + 2] = Math.min(255, to[2] * k);
+          break;
+        }
+      }
+      cx.putImageData(d, 0, 0);
+      const tex = src.clone(); tex.image = cv; tex.needsUpdate = true;
+      const mt = m.material.clone(); mt.map = tex; recolorCache.set(key, mt);
+    }
+    m.material = recolorCache.get(key);
+  });
+  return o;
+}
+const isRed = (r, g, b) => r > 150 && r > g + 70 && r > b + 70;                 // az alma héja
+const isTeal = (r, g, b) => g > r + 50 && g > b + 8;                            // a Kenney-tető zöldeskék cserepe
+const isLavender = (r, g, b) => b > r + 15 && b > g + 10 && r > 110;            // a falak lilás vakolata
+const PAL = {
+  szilva: [[isRed, [92, 44, 150], [244, 103, 67]]],                              // hamvas kéklila
+  barack: [[isRed, [250, 158, 62], [244, 103, 67]]],                             // narancssárga
+  cserep: [[isTeal, [178, 74, 44], [69, 160, 135]], [isLavender, [96, 66, 46], [125, 130, 156]]],   // terrakotta, alul sötét deszka
+  meszel: [[isLavender, [236, 228, 208], [173, 181, 217]]],                       // meszelt fal
+};
+/** Láthatatlan, de célozható gömb a kicsi tárgyak köré (a sugár a modellt nehezen találná el). */
+function hitProxy(parent, r, y = 0) {
+  const h = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+  h.position.y = y; parent.add(h); return h;
+}
+let seed = 12345; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+// talaj, út, udvar
+mesh(new THREE.PlaneGeometry(240, 240), mat(0x5d7f3e), 0, 0, 0).rotation.x = -Math.PI / 2;
+const yard = mesh(new THREE.PlaneGeometry(28, 24), mat(0x9a8a62), 0, 0.01, 0); yard.rotation.x = -Math.PI / 2;
+const road = mesh(new THREE.PlaneGeometry(240, 4.2), mat(0x8c8070), 0, 0.012, 16.5); road.rotation.x = -Math.PI / 2;
+const ROAD_Z = 16.5, GATE = new THREE.Vector3(0, 0, 13.4);
+const T = 2.6;   // a moduláris falelemek rácsmérete (a Kenney-egység 2,6-szorosa)
+const ROOF_RISE = 2.4, GABLE_MAT = mat(0xe6dcc4);
+
+/** Moduláris épület: nx × nz rács, az oldalanként megadott falelemekkel, nyeregtetővel (gerinc x irányú).
+ *  sides: {n,s,w,e}: elemnév-tömbök (n/s: x szerint, w/e: z szerint). Visszaadja a front (s) falelemeket. */
+function building(x0, z0, nx, nz, sides, wood = false, roofOn = true) {
+  const g = new THREE.Group(); scene.add(g);
+  const cx = i => x0 + T / 2 + T * i, cz = j => z0 + T / 2 + T * j;
+  const out = { s: [] };
+  const put = (name, x, z, ry) => prop('fantasy-town-kit/' + name, x, 0, z, T, ry, g);
+  const wl = o => (wood ? o : recolor(o, 'meszel', PAL.meszel));
+  sides.n?.forEach((n, i) => n && wl(put(n, cx(i), cz(0), Math.PI / 2)));
+  sides.s?.forEach((n, i) => n && out.s.push(wl(put(n, cx(i), cz(nz - 1), -Math.PI / 2))));
+  sides.w?.forEach((n, j) => n && wl(put(n, cx(0), cz(j), Math.PI)));
+  sides.e?.forEach((n, j) => n && wl(put(n, cx(nx - 1), cz(j), 0)));
+  if (roofOn) {
+    // cserepes nyeregtető: roof-gable elemek x irányú gerinccel, a teljes mélységre nyújtva (~40°-os hajlás)
+    const D = nz * T, zc = z0 + D / 2, RISE = ROOF_RISE;
+    for (let i = 0; i < nx; i++) recolor(prop('fantasy-town-kit/roof-gable', cx(i), T, zc, [T * 1.0, RISE / 0.57, D * 1.12 / 1.07], 0, g), 'cserep', PAL.cserep);
+    // oromfal mindkét végen: meszelt háromszög (a Kenney-csomagban nincs ilyen méretű)
+    const sh = new THREE.Shape([new THREE.Vector2(-D / 2, 0), new THREE.Vector2(D / 2, 0), new THREE.Vector2(0, RISE * 0.96)]);
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.18, bevelEnabled: false });
+    for (const [x, d] of [[x0 + 0.05, 1], [x0 + nx * T - 0.23, -1]]) {
+      const tri = mesh(geo, wood ? mat(0x6b4a30) : GABLE_MAT, x + (d < 0 ? 0.18 : 0), T, zc, g); tri.rotation.y = d > 0 ? Math.PI / 2 : -Math.PI / 2;
+    }
+  }
+  return out;
+}
+
+// ház: 3 × 2 rács, ajtó középen, zsalugáteres ablakok
+const house = building(-11.9, -8.2, 3, 2, {
+  n: ['wall', 'wall-window-shutters', 'wall'], s: ['wall-window-shutters', 'wall-door', 'wall-window-shutters'],
+  w: ['wall-window-shutters', 'wall'], e: ['wall', 'wall-window-shutters'] });
+colliders.push({ x0: -11.9, x1: -4.1, z0: -8.2, z1: -3.0 });
+prop('fantasy-town-kit/chimney', -6.0, T + 0.9, -6.6, T);
+const door = house.s[1];
+tag(door, { kind: 'house' }); label(door, 'HÁZ', 2.4);
+prop('furniture-kit/bench', -11.4, 0, -2.1, 2.4);
+// pinceajtó, kút
+const hatch = box(-3.2, 0.12, -2.4, 1.6, 0.25, 1.2, 0x4a3320, false);
+tag(hatch, { kind: 'cellar' }); label(hatch, 'PINCE', 0.8);
+const well = new THREE.Group(); well.position.set(-11, 0, 3); scene.add(well);
+cyl(0, 0.45, 0, 0.75, 0.9, 0x8d8a83, well);
+cyl(-0.7, 1.3, 0, 0.06, 1.8, 0x5a3a1e, well); cyl(0.7, 1.3, 0, 0.06, 1.8, 0x5a3a1e, well);
+const wr = mesh(new THREE.BoxGeometry(1.8, 0.08, 1.3), mat(0x7a3a24), 0, 2.25, 0, well); wr.rotation.z = 0.05;
+prop('survival-kit/bucket', 0.45, 0.9, 0.2, 3.2, 0, well);
+solidCircle(-11, 3, 0.8);
+tag(well, { kind: 'well' }); label(well, 'KÚT', 2.6);
+
+// pajta: 3 × 2 rács, fa falak, elöl nyitott, deszkatető
+building(3.1, -9.8, 3, 2, { n: ['wall-wood', 'wall-wood-window-small', 'wall-wood'], w: ['wall-wood', 'wall-wood'], e: ['wall-wood', 'wall-wood'] }, true, false);
+colliders.push({ x0: 3.1, x1: 10.9, z0: -9.8, z1: -9.55 }, { x0: 3.1, x1: 3.35, z0: -9.8, z1: -4.6 }, { x0: 10.65, x1: 10.9, z0: -9.8, z1: -4.6 });
+const barnRoof = box(7, 2.75, -7.2, 8.3, 0.16, 5.9, 0x6b4a30, false); barnRoof.rotation.x = -0.08;
+for (const x of [3.3, 10.7]) cyl(x, 1.4, -4.75, 0.09, 2.8, 0x4a3420);
+prop('nature-kit/log_stack', 4.3, 0, -9.0, 2.6, Math.PI / 2);
+prop('survival-kit/workbench', 9.7, 0, -5.4, 3.0, -Math.PI / 2);
+prop('survival-kit/tool-axe', 9.6, 0.88, -5.3, 2.4, 0.4);
+prop('survival-kit/barrel-open', 10.2, 0, -9.1, 3.4);
+prop('survival-kit/box-large', 4.0, 0, -5.6, 2.6, 0.3);
+prop('food-kit/wine-red', 9.9, 0.88, -5.6, 1.1);
+// üst (saját modell: a játék főszereplője)
+const still = new THREE.Group(); still.position.set(6.2, 0, -7.6); scene.add(still);
+const copper = mat(0xc8763f, { roughness: 0.35, metalness: 0.75 });
+mesh(new THREE.BoxGeometry(1.5, 0.5, 1.5), mat(0x5b5651), 0, 0.25, 0, still);
+cyl(0, 0.95, 0, 0.6, 0.9, copper, still);
+ball(0, 1.42, 0, 0.55, copper, still).scale.y = 0.75;
+cyl(0, 1.95, 0, 0.08, 0.5, copper, still);
+const pipe = cyl(0.75, 2.12, 0, 0.05, 1.5, copper, still); pipe.rotation.z = Math.PI / 2 - 0.15;
+cyl(1.55, 0.6, 0, 0.4, 1.2, 0x6f747a, still);
+cyl(0, 3.2, -0.5, 0.12, 2.4, 0x2b2b2b, still);
+solidCircle(6.2, -7.6, 0.9); solidCircle(7.75, -7.6, 0.45);
+tag(still, { kind: 'still' });
+const stillLbl = label(still, 'ÜST', 2.5);
+const fire = new THREE.PointLight(0xff7a26, 0, 5, 1.5); fire.position.set(0, 0.35, 0.85); still.add(fire);
+const fireGlow = mesh(new THREE.BoxGeometry(0.7, 0.18, 0.05), new THREE.MeshBasicMaterial({ color: 0xff6a1a }), 0, 0.22, 0.76, still);
+fireGlow.visible = false;
+// füst
+const smoke = [];
+const smokeMat = new THREE.MeshBasicMaterial({ color: 0xcfcfcf, transparent: true, opacity: 0.35, depthWrite: false });
+for (let i = 0; i < 18; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), smokeMat.clone()); s.visible = false; s.userData.t = i / 18; scene.add(s); smoke.push(s); }
+// hordó
+const barrel = new THREE.Group(); barrel.position.set(9.4, 0, -7.9); scene.add(barrel);
+prop('survival-kit/barrel', 0, 0, 0, 3.8, 0, barrel);
+solidCircle(9.4, -7.9, 0.5);
+tag(barrel, { kind: 'barrel' });
+const barrelLbl = label(barrel, 'HORDÓ', 1.7);
+
+// gyümölcsfák
+const fruits = [];
+const FRUIT_MODEL = { szilva: ['food-kit/apple', PAL.szilva, [1, 1.12, 1]], barack: ['food-kit/apple', PAL.barack, [1, 1, 1]], korte: ['food-kit/pear', null, [1, 1, 1]] };
+function fruitObj(t, x, y, z, s = 1.5) {
+  const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
+  const [key, pal, sh] = FRUIT_MODEL[t];
+  const m = prop(key, 0, -0.14, 0, sh.map(v => v * s), rnd() * 6, g); if (pal) recolor(m, t, pal);   // a szilva kicsit nyúlánkabb
+  return g;
+}
+const TREES = [{ x: -7, z: 5, t: 'szilva' }, { x: -2.5, z: 8.5, t: 'szilva' }, { x: 4.5, z: 6.5, t: 'barack' }];
+for (const Tr of TREES) {
+  prop('nature-kit/tree_fat', Tr.x, 0, Tr.z, 3.3, rnd() * 6);
+  solidCircle(Tr.x, Tr.z, 0.3);
+  const lbl = { szilva: 'SZILVAFA', barack: 'BARACKFA' }[Tr.t];
+  const anchor = new THREE.Object3D(); anchor.position.set(Tr.x, 0, Tr.z); scene.add(anchor); label(anchor, lbl, 4.2, 13);
+  for (const a of [0.6, 2.7, 4.6]) {
+    const f = fruitObj(Tr.t, Tr.x + Math.cos(a) * 1.2, 1.9 + rnd() * 0.35, Tr.z + Math.sin(a) * 1.1);
+    hitProxy(f, 0.32);
+    tag(f, { kind: 'fruit', tipus: Tr.t }); fruits.push(f);
+  }
+}
+prop('furniture-kit/tableCloth', -9.4, 0, 8.2, 2.4, 0.2);
+prop('furniture-kit/bench', -9.0, 0, 9.9, 2.4, Math.PI + 0.2);
+prop('food-kit/bottle-oil', -8.6, 0.8, 7.6, 0.9);
+
+// kerítés (elemekből), kapu lámpásokkal
+function fenceLine(x0, z0, x1, z1, n) {
+  const dx = (x1 - x0) / n, dz = (z1 - z0) / n, len = Math.hypot(dx, dz), ry = Math.atan2(dx, dz);
+  for (let k = 0; k < n; k++) {
+    const g = new THREE.Group(); g.position.set(x0 + dx * (k + 0.5), 0, z0 + dz * (k + 0.5)); g.rotation.y = ry; g.scale.set(2.8, 2.8, len);
+    prop('fantasy-town-kit/fence', -0.46, 0, 0, 1, 0, g); scene.add(g);
+  }
+}
+fenceLine(-14, -12, 14, -12, 10); fenceLine(-14, -12, -14, 12, 8); fenceLine(14, -12, 14, 12, 8);
+fenceLine(-14, 12, -2, 12, 4); fenceLine(2, 12, 14, 12, 4);
+colliders.push({ x0: -14, x1: 14, z0: -12.06, z1: -11.94 }, { x0: -14.06, x1: -13.94, z0: -12, z1: 12 }, { x0: 13.94, x1: 14.06, z0: -12, z1: 12 },
+  { x0: -14, x1: -2, z0: 11.94, z1: 12.06 }, { x0: 2, x1: 14, z0: 11.94, z1: 12.06 });
+const gateLights = [];
+for (const x of [-2.3, 2.3]) {
+  prop('fantasy-town-kit/lantern', x, 0, 12.2, 1.9); solidCircle(x, 12.2, 0.2);
+  const L = new THREE.PointLight(0xffc77a, 0, 9, 1.6); L.position.set(x, 2.75, 12.2); scene.add(L); gateLights.push(L);
+}
+
+// piac: két stand és egy szekér az út túloldalán
+const MARKET = { szilva: ['fantasy-town-kit/stall-red', 3.0], barack: ['fantasy-town-kit/cart', 6.4], korte: ['fantasy-town-kit/stall-green', 9.8] };
+for (const t of TYPES) {
+  const [key, x] = MARKET[t];
+  const st = new THREE.Group(); st.position.set(x, 0, 19.8); scene.add(st);
+  prop(key, 0, 0, 0, key.endsWith('cart') ? 2.2 : 2.4, Math.PI, st);
+  const top = key.endsWith('cart') ? 1.05 : 0.9;
+  for (let k = 0; k < 5; k++) {
+    const f = fruitObj(t, x - 0.7 + k * 0.35, top + 0.14, 19.25 + (k % 2) * 0.18, 1.3);
+    f.removeFromParent(); f.position.set(-0.7 + k * 0.35, top + 0.14, -0.55 + (k % 2) * 0.18); st.add(f);
+  }
+  colliders.push({ x0: x - 1.2, x1: x + 1.2, z0: 18.6, z1: 21.0 });
+  hitProxy(st, 1.0, 0.9);
+  tag(st, { kind: 'market', tipus: t });
+  label(st, `PIAC · ${DRINKS[t].gyumolcs}\n${ft(DRINKS[t].piac)} / 10 kg`, 3.2, 13);
+}
+
+// a szomszédok házai
+for (const [x, z] of [[-27, -6], [19, -6], [-24, 24], [17, 24]]) {
+  building(x, z, 3, 2, { n: ['wall', 'wall-window-shutters', 'wall'], s: ['wall-window-shutters', 'wall-door', 'wall-window-shutters'],
+    w: ['wall', 'wall'], e: ['wall', 'wall'] });
+}
+// táj: fák a kerítésen kívül, bokrok, fű, virág (az udvaron és az úton nincs)
+const outside = (x, z, m = 0) => (Math.abs(x) > 14.8 + m || z < -12.8 - m || z > 12.6 + m) && Math.abs(z - ROAD_Z) > 2.6 + m && !(z > 18 && z < 21.5 && x > 1 && x < 11.5);
+for (let k = 0, n = 0; n < 34 && k < 500; k++) {
+  const x = (rnd() - 0.5) * 110, z = (rnd() - 0.5) * 110;
+  if (!outside(x, z, 3) || Math.hypot(x, z) < 20) continue;
+  if ([[-27, -6], [19, -6], [-24, 24], [17, 24]].some(([hx, hz]) => x > hx - 3 && x < hx + 11 && z > hz - 3 && z < hz + 8)) continue;
+  prop('nature-kit/' + ['tree_oak', 'tree_default', 'tree_fat'][n % 3], x, 0, z, 4 + rnd() * 1.5, rnd() * 6); n++;
+}
+for (let k = 0, n = 0; n < 160 && k < 2000; k++) {
+  const x = (rnd() - 0.5) * 70, z = (rnd() - 0.5) * 70;
+  if (!outside(x, z)) continue;
+  const kind = ['grass', 'grass_large', 'grass', 'plant_bush', 'flower_redA', 'flower_yellowA', 'plant_bushLarge'][Math.floor(rnd() * 7)];
+  prop('nature-kit/' + kind, x, 0, z, 2.5 + rnd(), rnd() * 6, scene, false); n++;
+}
+for (const [x, z] of [[-13, -10.5], [-12.6, 10.6], [13, 10.8], [12.6, -10.6], [-1, -10.8], [1.5, 10.8]]) prop('nature-kit/grass_large', x, 0, z, 2.6, rnd() * 6, scene, false);
+
+// ================================================================ játékos
+const player = { pos: new THREE.Vector3(0, 0, 4), yaw: 0, pitch: 0, vy: 0, locked: false };
+const keys = new Set();
+const RADIUS = 0.35, EYE = 1.65;
+
+function collide(p) {
+  for (const c of colliders) {
+    const cx = Math.max(c.x0, Math.min(p.x, c.x1)), cz = Math.max(c.z0, Math.min(p.z, c.z1));
+    const dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
+    if (d2 < RADIUS * RADIUS) {
+      if (d2 > 1e-8) { const d = Math.sqrt(d2), k = (RADIUS - d) / d; p.x += dx * k; p.z += dz * k; }
+      else { // a középpont a dobozban: a legközelebbi oldalra
+        const pen = [[p.x - c.x0 + RADIUS, -1, 0], [c.x1 - p.x + RADIUS, 1, 0], [p.z - c.z0 + RADIUS, 0, -1], [c.z1 - p.z + RADIUS, 0, 1]].sort((a, b) => a[0] - b[0])[0];
+        p.x += pen[1] * pen[0]; p.z += pen[2] * pen[0];
+      }
+    }
+  }
+}
+
+function movePlayer(dt) {
+  if (!player.locked && !stillMode) {
+    const f = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
+    const r = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0);
+    const sp = keys.has('ShiftLeft') ? 7 : 4.2;
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    let vx = fx * f + Math.cos(player.yaw) * r, vz = fz * f - Math.sin(player.yaw) * r;
+    const n = Math.hypot(vx, vz) || 1;
+    player.pos.x += vx / n * sp * dt * (f || r ? 1 : 0);
+    player.pos.z += vz / n * sp * dt * (f || r ? 1 : 0);
+    if (keys.has('Space') && player.pos.y <= 0) player.vy = 4.5;
+  }
+  player.vy -= 12 * dt; player.pos.y = Math.max(0, player.pos.y + player.vy * dt); if (player.pos.y === 0) player.vy = 0;
+  collide(player.pos);
+  camera.position.set(player.pos.x, player.pos.y + EYE, player.pos.z);
+  camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+}
+
+const ray = new THREE.Raycaster(); ray.far = 3.4;
+function aimed() {
+  camera.updateMatrixWorld(); scene.updateMatrixWorld();   // (a kamera nincs a jelenetfában) a mátrixok különben csak rajzoláskor frissülnek: a célzás a mozgó vevőt a régi helyén keresné
+  ray.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const hits = ray.intersectObjects(interact.filter(o => o.visible), true);
+  for (const h of hits) { const r = h.object.userData.root; if (r && r.userData.kind && r.visible) return r; }
+  return null;
+}
+
+// ================================================================ vevő, pénzügyőr
+let customerObj = null, inspectorObj = null, inspectorActive = false;
+const movers = [];   // {obj, path:[{p,t}], i, done}
+function moveAlong(obj, pts, done) { movers.push({ obj, pts, i: 0, t: 0, done }); }
+function stepMovers(dt) {
+  for (let k = movers.length - 1; k >= 0; k--) {
+    const m = movers[k], seg = m.pts[m.i];
+    if (!seg) { movers.splice(k, 1); m.done && m.done(); continue; }
+    if (seg.wait) { m.t += dt; if (m.t >= seg.wait) { m.i++; m.t = 0; } continue; }
+    if (!seg.from) seg.from = m.obj.position.clone();
+    m.t += dt; const a = Math.min(1, m.t / seg.dur), e = seg.ease ? 1 - (1 - a) * (1 - a) : a;
+    m.obj.position.lerpVectors(seg.from, seg.to, e);
+    if (m.obj.userData.mixer) { const d = seg.to.clone().sub(seg.from); if (d.lengthSq() > 1e-4) m.obj.rotation.y = Math.atan2(d.x, d.z); }
+    if (a >= 1) { m.i++; m.t = 0; }
+  }
+}
+
+const CHARS = ['character-male-a', 'character-female-b', 'character-male-c', 'character-female-a', 'character-male-e', 'character-female-c', 'character-male-b', 'character-female-d'];
+const mixers = new Set();
+/** Falusi figura (Kenney mini-characters) járás/áll animációval; obj.userData.anim(név) vált. */
+function personMesh(idx) {
+  const key = 'mini-characters/' + CHARS[idx % CHARS.length];
+  const g = new THREE.Group();
+  const m = prop(key, 0, 0, 0, 2.4, 0, g);
+  const mixer = new THREE.AnimationMixer(m); mixers.add(mixer);
+  const clips = MODELS[key].animations;
+  let cur = null;
+  g.userData.anim = name => {
+    const c = clips.find(a => a.name === name); if (!c) return;
+    const act = mixer.clipAction(c); if (cur === act) return;
+    act.reset().fadeIn(0.2).play(); if (cur) cur.fadeOut(0.2); cur = act;
+  };
+  g.userData.mixer = mixer;
+  hitProxy(g, 0.6, 0.9);
+  return g;
+}
+
+function updateCustomer() {
+  if (sim.customer && !customerObj) {
+    customerObj = personMesh(VEVOK_IDX(sim.customer.nev));
+    customerObj.userData.anim('walk');
+    customerObj.position.set(-26, 0, ROAD_Z);
+    scene.add(customerObj);
+    tag(customerObj, { kind: 'customer' });
+    customerObj.userData.lbl = label(customerObj, `${sim.customer.nev}\n${sim.wishText()}`, 2.3, 14);
+    const co = customerObj;
+    moveAlong(co, [{ to: new THREE.Vector3(0, 0, ROAD_Z), dur: 5 }, { to: GATE, dur: 1.4 }], () => { co.rotation.y = Math.PI; co.userData.anim('idle'); });
+  } else if (!sim.customer && customerObj) {
+    const o = customerObj; customerObj = null;
+    o.userData.kind = 'gone';
+    removeLabel(o.userData.lbl);
+    o.userData.anim('walk');
+    moveAlong(o, [{ to: new THREE.Vector3(0, 0, ROAD_Z), dur: 1.2 }, { to: new THREE.Vector3(26, 0, ROAD_Z), dur: 5 }], () => { scene.remove(o); mixers.delete(o.userData.mixer); });
+  }
+}
+function removeLabel(L) { if (!L) return; L.el.remove(); labels.splice(labels.indexOf(L), 1); }
+
+function updateInspector() {
+  if (!sim.inspectorDue || inspectorActive) return;
+  inspectorActive = true;
+  log('Piros szolgálati autó fékez a kapu előtt. A PÉNZÜGYŐR! Oltsd el a tüzet, pakold el a pálinkát!');
+  const g = new THREE.Group();
+  prop('car-kit/sedan', 0, 0, 0, 1.7, -Math.PI / 2, g);
+  g.position.set(40, 0, ROAD_Z + 0.4);
+  scene.add(g); inspectorObj = g;
+  const L = label(g, 'PÉNZÜGYŐR', 2.6, 18);
+  moveAlong(g, [{ to: new THREE.Vector3(3, 0, ROAD_Z + 0.4), dur: 10, ease: true }], () => {
+    sim.inspect();
+    moveAlong(g, [{ wait: 3 }, { to: new THREE.Vector3(-45, 0, ROAD_Z + 0.4), dur: 6 }], () => { scene.remove(g); removeLabel(L); inspectorObj = null; inspectorActive = false; });
+  });
+}
+
+// ================================================================ HUD
+const $ = id => document.getElementById(id);
+const logLines = [];
+function log(t) { logLines.push({ t, life: 9 }); if (logLines.length > 6) logLines.shift(); }
+sim.on(log);
+
+function stockLine(b) { return `${hu(b.l, 2)} l · ${hu(b.fok, 0)} fok · ${Math.floor(b.q)} pont`; }
+function dur(m) { m = Math.ceil(m); return `${Math.floor(m / 60)} ó ${String(m % 60).padStart(2, '0')} p`; }
+
+function hud(dt) {
+  const L = [`<b>${sim.clock()}</b>`, `Pénz: <b>${ft(sim.money)}</b>`];
+  const fr = TYPES.filter(t => sim.fruit[t] > 0).map(t => `${DRINKS[t].gyumolcs} ${sim.fruit[t]} kg`);
+  L.push(`Gyümölcs: ${fr.length ? fr.join(' · ') : '—'}`);
+  if (sim.fermenting()) L.push(`Hordó: ${hu(sim.barrel.l, 0)} l ${DRINKS[sim.barrel.tipus].gyumolcs}cefre, még ${dur(sim.barrelLeft())}`);
+  const ma = TYPES.filter(t => sim.mash[t] > 0.5).map(t => `${DRINKS[t].gyumolcs} ${hu(sim.mash[t], 0)} l`);
+  L.push(`Kész cefre: ${ma.length ? ma.join(' · ') : '—'}`);
+  const outs = TYPES.filter(t => sim.out[t].l > 0.001), cel = TYPES.filter(t => sim.cellar[t].l > 0.001);
+  L.push('Pálinka kint:' + (outs.length ? '' : ' —'));
+  for (const t of outs) L.push(`<span class="sub">&nbsp;&nbsp;${DRINKS[t].nev}: ${stockLine(sim.out[t])}</span>`);
+  L.push('A pincében:' + (cel.length ? '' : ' —'));
+  for (const t of cel) L.push(`<span class="sub">&nbsp;&nbsp;${DRINKS[t].nev}: ${stockLine(sim.cellar[t])}</span>`);
+  $('status').innerHTML = L.join('<br>');
+
+  const g = sim.suspicion;
+  $('gy-t').textContent = `GYANÚ ${Math.floor(g)} / 100` + (inspectorActive ? ' — PÉNZÜGYŐR!' : '');
+  $('gy-b').style.width = g + '%';
+  $('gy-b').style.background = `hsl(${110 - g * 1.1},65%,45%)`;
+
+  for (const l of logLines) l.life -= dt;
+  $('log').innerHTML = logLines.filter(l => l.life > 0).map(l => `<div style="opacity:${Math.min(1, l.life)}">${l.t}</div>`).join('');
+
+  const s = sim.still;
+  $('ust').style.display = stillMode ? 'block' : 'none';
+  if (stillMode) {
+    const pct = v => ((v - 20) / 90) * 100;
+    $('ust-t').style.width = pct(s.temp) + '%';
+    $('ust-t').style.background = s.temp < 86 ? '#58e' : s.temp > 96 ? '#e43' : '#4c4';
+    $('ust-band').style.left = pct(88) + '%'; $('ust-band').style.width = (pct(94) - pct(88)) + '%';
+    const ved = { elo: 'MOSLÉK (előpárlat)', sziv: 'PALACK', uto: 'MOSLÉK (utópárlat)' }[s.vessel];
+    $('ust-info').innerHTML = [
+      `Hőfok: <b>${hu(s.temp, 0)} °C</b> &nbsp;(jó sáv: 88–94 °C)`,
+      `Tűz: ${Math.round(s.heat * 100)} %`,
+      `Most jön: <b>${sim.phase()}</b> (${Math.floor(s.p * 100)} % kint)`,
+      `Gyűjtőedény: <b>${ved}</b>`,
+      `Palackban: ${hu(s.prodL, 2)} l · ${hu(sim.fokPreview(), 0)} fok · ${sim.qualityPreview()} pont`,
+    ].join('<br>');
+  }
+  const tgt = stillMode ? null : aimed();
+  $('prompt').textContent = promptFor(tgt);
+  stillLbl.el.textContent = s.running ? `ÜST · ${hu(s.temp, 0)} °C` : 'ÜST';
+  barrelLbl.el.textContent = sim.fermenting() ? 'HORDÓ · erjed' : 'HORDÓ';
+}
+
+const _v = new THREE.Vector3();
+/** A 3D-felirat ne csússzon a HUD-panelek alá (állapot, gyanú, üst). */
+function hudHit(x, y) {
+  for (const id of ['status', 'gyanu', 'ust']) {
+    const el = $(id); if (el.style.display === 'none') continue;
+    const r = el.getBoundingClientRect();
+    if (x > r.left - 40 && x < r.right + 40 && y > r.top - 10 && y < r.bottom + 30) return true;
+  }
+  return false;
+}
+function placeLabels() {
+  for (const L of labels) {
+    L.obj.getWorldPosition(_v); _v.y += L.off;
+    const d = camera.position.distanceTo(_v);
+    _v.project(camera);
+    const sx = (_v.x + 1) / 2 * innerWidth, sy = (1 - _v.y) / 2 * innerHeight;
+    if (_v.z > 1 || d > 32 || !L.obj.visible || hudHit(sx, sy)) { L.el.style.display = 'none'; continue; }
+    L.el.style.display = 'block';
+    L.el.style.left = sx + 'px';
+    L.el.style.top = sy + 'px';
+    L.el.style.fontSize = Math.round(L.size * Math.max(0.75, Math.min(1.3, 8 / d))) + 'px';
+    L.el.style.opacity = d > 24 ? Math.max(0, (32 - d) / 8) : 1;
+  }
+}
+
+// ================================================================ interakció
+function promptFor(n) {
+  if (!n) return '';
+  const k = n.userData.kind, t = n.userData.tipus;
+  switch (k) {
+    case 'fruit': return `E – ${DRINKS[t].gyumolcs} leszedése (+4 kg)`;
+    case 'market': return `E – 10 kg ${DRINKS[t].gyumolcs}, ${ft(DRINKS[t].piac)}`;
+    case 'barrel':
+      if (sim.fermenting()) return `Erjed még ${dur(sim.barrelLeft())}`;
+      if (sim.fruitTotal() > 0) { const m = sim.mainFruit(); return `E – ${Math.min(sim.fruit[m], 60)} kg ${DRINKS[m].gyumolcs} a hordóba`; }
+      return 'A hordó üres. Gyümölcs kell bele.';
+    case 'still':
+      if (sim.still.running) return 'E – az üst kezelése';
+      if (sim.mashTotal() >= 1) return 'E – cefre az üstbe';
+      return 'Az üst üres. Kész cefre kell bele.';
+    case 'well': return sim.outTotal() > 0 ? 'E – vizezés (−5 fok, több lesz belőle)' : 'Kút. Ide jön az ember, ha sok a pálinka és kevés a lelkiismeret.';
+    case 'cellar': return sim.outTotal() > 0 ? 'E – minden pálinka le a pincébe' : sim.cellarTotal() > 0 ? 'E – pálinka fel a pincéből' : 'A pince üres.';
+    case 'customer': {
+      if (!sim.customer) return '';
+      const m = sim.match();
+      return m.tipus ? `E – eladás: ${sim.wishText()}  (${ft(sim.price(m.tipus, sim.customer.l, sim.out[m.tipus].q, sim.out[m.tipus].fok, sim.customer.szorzo || 1))})` : `${sim.wishText()}`;
+    }
+    case 'house': return sim.hour() >= 18 || sim.hour() < 6 ? 'E – alvás reggelig' : 'Még világos van, dolog akad.';
+  }
+  return '';
+}
+
+let stillMode = false;
+function setStillMode(on) { stillMode = on && sim.still.running; }
+
+function doInteract(n) {
+  if (!n) return;
+  const k = n.userData.kind, t = n.userData.tipus;
+  if (k === 'fruit') { sim.pick(t); n.visible = false; }
+  else if (k === 'market') sim.buy(t);
+  else if (k === 'barrel') sim.fillBarrel();
+  else if (k === 'still') { if (sim.still.running || sim.loadStill()) setStillMode(true); }
+  else if (k === 'well') sim.water();
+  else if (k === 'cellar') sim.toggleCellar();
+  else if (k === 'customer') sim.sell();
+  else if (k === 'house' && (sim.hour() >= 18 || sim.hour() < 6)) sim.sleep();
+}
+
+addEventListener('keydown', e => {
+  keys.add(e.code);
+  if (e.repeat) return;
+  if (e.code === 'KeyE') { if (stillMode) setStillMode(false); else doInteract(aimed()); }
+  else if (e.code === 'KeyT') sim.advance(60);
+  else if (stillMode && e.code === 'Space') sim.cut();
+  else if (stillMode && e.code === 'KeyQ') sim.finishStill();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement !== renderer.domElement || stillMode || player.locked) return;
+  player.yaw -= e.movementX * 0.0022;
+  player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * 0.0022));
+});
+$('start').addEventListener('click', () => { $('start').style.display = 'none'; renderer.domElement.requestPointerLock(); });
+renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
+if (TEST) $('start').style.display = 'none';
+
+// ================================================================ napszak, füst, főciklus
+function daylight() {
+  const h = (sim.minutes % 1440) / 60;
+  const el = Math.sin(((h - 6) / 12) * Math.PI);
+  const a = Math.max(0, Math.min(1, el * 1.6));
+  const sky = NIGHT_SKY.clone().lerp(DAY_SKY, a);
+  if (el > -0.1 && el < 0.35) sky.lerp(DUSK, 0.35 * (1 - Math.abs(el - 0.12) / 0.23));
+  scene.background.copy(sky); scene.fog.color.copy(sky);
+  const ang = ((h - 6) / 12) * Math.PI;
+  sun.position.set(Math.cos(ang) * 40, Math.max(0.15, Math.sin(ang)) * 50, 28);   // délről süt: a tanya eleje világos
+  sun.intensity = Math.max(0, el) * 3.0;
+  hemi.intensity = 0.2 + 1.5 * a;
+  yardLamp.intensity = el < 0.15 ? 26 : 0;
+  for (const L of gateLights) L.intensity = el < 0.15 ? 14 : 0;
+}
+
+function stepSmoke(dt) {
+  const on = sim.still.running && sim.still.temp > 60;
+  for (const s of smoke) {
+    s.userData.t += dt * 0.25;
+    if (s.userData.t > 1) s.userData.t -= 1;
+    const t = s.userData.t;
+    s.visible = on;
+    s.position.set(6.2 + t * 1.6, 4.4 + t * 4.0, -8.1 + Math.sin(t * 9 + s.id) * 0.3);
+    s.scale.setScalar(0.5 + t * 2.0);
+    s.material.opacity = 0.4 * (1 - t);
+  }
+}
+
+function step(dt) {
+  if (stillMode) {
+    if (keys.has('KeyW')) sim.setHeat(sim.still.heat + 0.5 * dt);
+    if (keys.has('KeyS')) sim.setHeat(sim.still.heat - 0.5 * dt);
+  }
+  if (sim.step(dt)) for (const f of fruits) f.visible = true;
+  if (stillMode && !sim.still.running) setStillMode(false);
+  fire.intensity = sim.still.running ? sim.still.heat * 9 : 0;
+  fireGlow.visible = sim.still.running && sim.still.heat > 0.05;
+  movePlayer(dt);
+  updateCustomer();
+  updateInspector();
+  stepMovers(dt);
+  for (const mx of mixers) mx.update(dt);
+  stepSmoke(dt);
+  daylight();
+}
+
+function render() { renderer.render(scene, camera); placeLabels(); }
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  step(dt);
+  hud(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+log('Nagyapád tanyája. A pajtában ott az üst. Szedj gyümölcsöt, és kezdődhet.');
+
+// tesztkampó (Playwright): idő léptetése, kamera, állapot
+window.__teszt = {
+  sim, setStillMode,
+  hely(x, z, yaw, pitch = 0) { player.pos.set(x, 0, z); player.yaw = yaw * Math.PI / 180; player.pitch = pitch * Math.PI / 180; movePlayer(0); },
+  lep(sec) { const n = Math.round(sec * 30); for (let i = 0; i < n; i++) step(1 / 30); hud(1 / 30); render(); },
+  celzott: () => { const a = aimed(); return a ? a.userData.kind : null; },
+  prompt: () => $('prompt').textContent,
+  interact: () => doInteract(aimed()),
+  allapot: () => ({ ido: sim.clock(), penz: sim.money, gyanu: sim.suspicion, vevo: !!customerObj, penzugyor: inspectorActive, ust: stillMode }),
+};
+</script>
+</body>
+</html>

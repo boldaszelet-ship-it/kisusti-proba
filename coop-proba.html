@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kisüsti — coop-próba</title>
+<style>
+  :root {
+    --mely: #120b06; --barna: #24170e; --barna2: #33210f; --rez: #b8733a; --rez2: #dc9550; --bor: #f2b44c; --papir: #f3e7cc;
+    --halk: #cdb48c; --zold: #a3cc6e; --piros: #ec6a50; --kek: #79b4d2; --kemeny: cubic-bezier(.2, .9, .3, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(120% 90% at 30% 0%, #2b1b0f 0%, var(--mely) 70%); color: var(--papir);
+    font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  h1 { margin: 0; font: 700 22px/1.1 Georgia, 'Times New Roman', serif; letter-spacing: .02em; color: var(--bor); }
+  h2 { margin: 0 0 .5em; font: 700 13px/1 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--halk); }
+  button { font: inherit; color: var(--mely); background: linear-gradient(var(--rez2), var(--rez)); border: 0; border-radius: .5em; padding: .55em .9em;
+    font-weight: 650; cursor: pointer; transition: transform .08s var(--kemeny), filter .15s; box-shadow: 0 2px 0 #5a3416, 0 4px 10px rgba(0,0,0,.35); }
+  button:hover { filter: brightness(1.08); } button:active, button.nyomva { transform: translateY(2px) scale(.98); box-shadow: 0 0 0 #5a3416; }
+  button.masod { background: transparent; color: var(--papir); border: 1px solid rgba(220,149,80,.45); box-shadow: none; }
+  button:disabled { opacity: .45; cursor: default; }
+  input { font: inherit; color: var(--papir); background: rgba(0,0,0,.35); border: 1px solid rgba(220,149,80,.4); border-radius: .5em; padding: .5em .7em; }
+  input.kod { text-transform: uppercase; letter-spacing: .3em; width: 7.5em; font-weight: 700; text-align: center; }
+  .doboz { background: linear-gradient(rgba(51,33,15,.92), rgba(36,23,14,.92)); border: 1px solid rgba(220,149,80,.28); border-radius: .8em; padding: 14px 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  #kezdo { max-width: 560px; margin: 10vh auto 0; display: grid; gap: 14px; padding: 0 16px; }
+  #kezdo .sor { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #kezdo p { margin: 0; color: var(--halk); }
+  #jatek { display: none; grid-template-columns: minmax(380px, 1.35fr) minmax(320px, 1fr); gap: 14px; padding: 14px; max-width: 1280px; margin: 0 auto; }
+  #fej { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  #szobakod { font: 800 26px/1 ui-monospace, Menlo, monospace; letter-spacing: .3em; color: var(--bor); background: rgba(0,0,0,.3); padding: .25em .5em; border-radius: .4em;
+    border: 1px dashed rgba(242,180,76,.5); }
+  #kapcsolat { margin-left: auto; color: var(--halk); font-size: 14px; }
+  #kapcsolat b { color: var(--zold); } #kapcsolat.rossz b { color: var(--piros); }
+  canvas { width: 100%; height: auto; display: block; border-radius: .5em; background: #1a2412; }
+  .jatekosok { display: grid; gap: 6px; }
+  .jatekos { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: .45em; background: rgba(255,255,255,.03); }
+  .jatekos i { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
+  .jatekos .cimke { font-size: 12px; color: var(--halk); margin-left: auto; }
+  .jatekos.off { opacity: .45; }
+  .penz { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .penz div { background: rgba(0,0,0,.25); border-radius: .45em; padding: 8px 10px; }
+  .penz small { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--halk); }
+  .penz b { font: 700 19px/1.2 Georgia, serif; color: var(--bor); transition: color .4s; }
+  .penz b.villan { color: var(--zold); }
+  .gombok { display: flex; flex-wrap: wrap; gap: 8px; }
+  .lista { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; font-size: 14px; }
+  .lista li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: .4em; background: rgba(255,255,255,.035); }
+  .lista li span:first-child { flex: 1; } .lista li button { padding: .3em .6em; font-size: 13px; }
+  .ures { color: var(--halk); font-style: italic; font-size: 14px; }
+  #ust { display: none; gap: 10px; }
+  #ust.be { display: grid; }
+  .mero { height: 14px; border-radius: 7px; background: rgba(0,0,0,.4); overflow: hidden; position: relative; }
+  .mero > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--kek), var(--bor), var(--piros)); transition: width .1s linear; }
+  .mero .ideal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--zold); }
+  #naplo { margin: 0; padding: 0; list-style: none; font-size: 13.5px; max-height: 210px; overflow: auto; display: flex; flex-direction: column-reverse; gap: 3px; }
+  #naplo li { padding: 3px 6px; border-left: 3px solid rgba(220,149,80,.4); animation: be .35s var(--kemeny); }
+  #naplo li.hiba { border-color: var(--piros); color: #f6c1b4; } #naplo li.jo { border-color: var(--zold); } #naplo li.coop { border-color: var(--kek); }
+  @keyframes be { from { opacity: 0; transform: translateX(-8px); } }
+  #szalag { grid-column: 1 / -1; display: none; padding: 10px 14px; border-radius: .6em; background: rgba(236,106,80,.15); border: 1px solid var(--piros); }
+  #szalag.be { display: block; }
+  #vege { position: fixed; inset: 0; display: none; place-items: center; background: rgba(10,6,3,.82); }
+  #vege.be { display: grid; } #vege .doboz { max-width: 460px; display: grid; gap: 12px; }
+  .sugo { font-size: 13px; color: var(--halk); }
+  kbd { font: 600 12px ui-monospace, monospace; padding: .1em .4em; border-radius: .3em; background: rgba(0,0,0,.35); border: 1px solid rgba(220,149,80,.35); }
+  .bal, .jobb { display: grid; gap: 14px; align-content: start; }
+</style>
+</head>
+<body>
+<section id="kezdo">
+  <div class="doboz" style="display:grid;gap:12px">
+    <h1>Kisüsti — coop-próba</h1>
+    <p>Két böngészőablakban kipróbálható közös játék 3D nélkül: szobakód, játékoslista, a többiek helye a térképen, közös pénz és készlet.</p>
+    <div class="sor"><label for="nev">A neved</label><input id="nev" maxlength="16"></div>
+    <div class="sor"><button id="nyit">Szobát nyitok</button><span class="sugo">a te gépeden fut a falu</span></div>
+    <div class="sor"><input id="kodbe" class="kod" maxlength="4" placeholder="KÓD"><button id="belep" class="masod">Belépek</button></div>
+    <p id="kezdohiba" style="color:var(--piros)"></p>
+  </div>
+  <p class="sugo">Indítás: <kbd>node server/relay.mjs</kbd>, majd ezt az oldalt két ablakban (nem két fülön: a háttérfület a böngésző lassítja).</p>
+</section>
+
+<section id="jatek">
+  <div id="fej" class="doboz">
+    <h1>Kisüsti</h1>
+    <div>Szobakód: <span id="szobakod">····</span></div>
+    <div id="ido" style="font:700 18px Georgia,serif"></div>
+    <div id="kapcsolat"></div>
+  </div>
+  <div id="szalag"></div>
+  <div class="bal">
+    <div class="doboz">
+      <h2>Térkép</h2>
+      <canvas id="terkep" width="1140" height="880"></canvas>
+      <p class="sugo" style="margin:.5em 0 0"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> vagy nyilak: séta (a próbában gyorsítva), <kbd>Shift</kbd>: biciklivel. A többiek figurája 100 ms-mal a múltban, interpolálva mozog.</p>
+    </div>
+    <div class="doboz">
+      <h2>Napló</h2>
+      <ul id="naplo"></ul>
+    </div>
+  </div>
+  <div class="jobb">
+    <div class="doboz">
+      <h2>Játékosok</h2>
+      <div id="jatekosok" class="jatekosok"></div>
+    </div>
+    <div class="doboz">
+      <h2>Közös kassza</h2>
+      <div class="penz"><div><small>Zseb</small><b id="kp">–</b></div><div><small>Dunyha</small><b id="dunyha">–</b></div><div><small>Számla</small><b id="szamla">–</b></div></div>
+    </div>
+    <div class="doboz" style="display:grid;gap:10px">
+      <h2>Tanya</h2>
+      <div class="gombok">
+        <button data-p="szuret">Szüret</button>
+        <button data-p="cefre">Cefre a hordóba</button>
+        <button data-p="fozes">Kézi főzés</button>
+        <button data-p="dunyhaba" class="masod">1000 Ft a dunyhába</button>
+        <button data-p="alvas" class="masod">Lefekszem</button>
+        <button data-p="ido" class="masod" data-host>+3 óra</button>
+      </div>
+      <div id="ust">
+        <div style="display:flex;justify-content:space-between"><b id="ustcim">Üst</b><span id="ustfazis" class="sugo"></span></div>
+        <div class="mero"><div id="homero"></div><span class="ideal" style="left:calc((93 - 20) / 92 * 100%)"></span></div>
+        <div class="mero"><div id="haladas" style="background:linear-gradient(90deg,#8a6b42,var(--bor))"></div></div>
+        <div class="gombok"><label class="sugo">Fűtés <input id="futes" type="range" min="0" max="1" step="0.01" value="0.75" style="vertical-align:middle;width:180px"></label>
+          <button id="vagas">Vágás <kbd>Space</kbd></button></div>
+        <p class="sugo" style="margin:0">A minigame a te gépeden fut: a hőmérő ugyanabban a képkockában mozdul, a házigazda a fűtésed sorát játssza vissza.</p>
+      </div>
+    </div>
+    <div class="doboz">
+      <h2>Készlet</h2>
+      <ul id="keszlet" class="lista"></ul>
+    </div>
+    <div class="doboz">
+      <h2>Rendelések</h2>
+      <ul id="rendelesek" class="lista"></ul>
+    </div>
+  </div>
+</section>
+
+<div id="vege"><div class="doboz">
+  <h1>A szoba bezárult</h1>
+  <p id="vegeszoveg"></p>
+  <div class="gombok"><button id="letolt">Mentés letöltése</button><button class="masod" onclick="location.reload()">Új szoba</button></div>
+</div></div>
+
+<script type="module">
+import { Coop } from './js/coop/coop.js';
+import { Empire } from './sim/empire.js';
+import { BOUNDS, ROADS, NODES, REGIONS, PROPERTIES, RIVER } from './data/regions.js';
+
+const $ = id => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+const RELE = P.get('rele') || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+const SZINEK = ['#dc9550', '#79b4d2', '#a3cc6e', '#ec6a50'];
+const NEVEK = ['Pista', 'Juci', 'Feri', 'Bözsi', 'Laci', 'Marika'];
+const SETA = 45, BICIKLI = 140;   // m/s a térképen (a próbában gyorsítva, hogy a 1100 m-es térkép bejárható legyen)
+const ft = v => Math.round(v).toLocaleString('hu-HU') + ' Ft';
+const hu = (v, d = 1) => v.toLocaleString('hu-HU', { maximumFractionDigits: d });
+
+$('nev').value = localStorage.getItem('coop-nev') || NEVEK[Math.floor(Math.random() * NEVEK.length)];
+if (P.get('kod')) $('kodbe').value = P.get('kod');
+let coop, E, en = { x: 6, z: 10, yaw: 0 };
+const billentyu = new Set();
+
+async function indul(host) {
+  const nev = $('nev').value.trim() || 'Névtelen';
+  localStorage.setItem('coop-nev', nev);
+  coop = new Coop({ url: RELE, nev });
+  $('kezdohiba').textContent = '';
+  try {
+    if (host) await coop.hostol(null, new Empire(Number(P.get('mag')) || Date.now()));
+    else await coop.csatlakozik($('kodbe').value.trim().toUpperCase());
+  } catch (e) { $('kezdohiba').textContent = e.message; return; }
+  E = coop.E;
+  $('kezdo').style.display = 'none'; $('jatek').style.display = 'grid';
+  $('szobakod').textContent = coop.kod;
+  history.replaceState(null, '', `?kod=${coop.kod}`);
+  document.querySelectorAll('[data-host]').forEach(b => b.style.display = coop.szerep === 'host' ? '' : 'none');
+  E.on(esemeny);
+  coop.on(coopEsemeny);
+  requestAnimationFrame(keret);
+}
+$('nyit').onclick = () => indul(true);
+$('belep').onclick = () => indul(false);
+$('kodbe').onkeydown = e => { if (e.key === 'Enter') indul(false); };
+
+// ------------------------------------------------------------ napló
+function naplo(szoveg, osztaly = '') {
+  const li = document.createElement('li'); li.textContent = szoveg; if (osztaly) li.className = osztaly;
+  $('naplo').prepend(li); while ($('naplo').children.length > 60) $('naplo').lastChild.remove();
+}
+const nevE = id => coop.jatekosok.find(j => j.id === id)?.nev || id;
+function esemeny(e) {
+  const ki = e.ki && e.ki !== coop.te ? `${nevE(e.ki)}: ` : '';
+  if (e.type === 'msg') naplo(ki + e.text, e.hiba ? 'hiba' : '');
+  else if (e.type === 'sale') { naplo(`${ki}eladás, ${hu(e.l, 2)} l → ${ft(e.ar)}`, 'jo'); villan('kp'); }
+  else if (e.type === 'sms') naplo(`SMS — ${e.uzenet.nev}: ${e.uzenet.szoveg}`);
+  else if (e.type === 'dayEnd') naplo(`Vége a ${e.osszesito.nap}. napnak: bevétel ${ft(e.osszesito.bevetel)}.`, 'jo');
+}
+function coopEsemeny(e) {
+  if (e.type === 'utkozes') naplo(e.ki === coop.te ? `${e.kieNev} már fogja: ${e.kulcs}` : `${e.kiNev} is nyúlt hozzá (${e.kulcs}), de nálad volt.`, 'coop');
+  else if (e.type === 'jatekosok') rajzJatekosok();
+  else if (e.type === 'meta' && e.alvas) naplo(`Alvás: ${e.alvas.igen.length} / ${e.alvas.kell.length} feküdt le (${e.alvas.igen.map(nevE).join(', ')}).`, 'coop');
+  else if (e.type === 'hostKiesett') { szalag(`A házigazda kiesett — ${e.mp} mp-ig várunk rá. A mentés közben is nálad van.`); }
+  else if (e.type === 'hostVissza') { szalag(''); naplo('A házigazda visszajött.', 'coop'); }
+  else if (e.type === 'kapcsolat') naplo(e.allapot === 'ujra' ? 'Megszakadt a kapcsolat, újracsatlakozás…' : 'Újra a szobában.', 'coop');
+  else if (e.type === 'vege') vege(e);
+}
+const szalag = t => { $('szalag').textContent = t; $('szalag').classList.toggle('be', !!t); };
+function vege(e) {
+  const ok = { host: 'A házigazda kilépett.', kapcsolat: 'Megszakadt a kapcsolat a reléval.', kilepett: 'Kiléptél.', ures: 'Mindenki kilépett.' }[e.ok] || e.ok;
+  $('vegeszoveg').textContent = `${ok} A közös falu utolsó állapota nálad van (${e.mentes ? hu(e.mentes.length / 1024, 0) + ' KB' : 'nincs'}, forrás: ${e.forras === 'relé' ? 'a relé példánya' : 'a saját tükröd'}).`;
+  $('letolt').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([e.mentes], { type: 'application/json' })); a.download = `kisusti-coop-${coop.kod}.json`; a.click(); };
+  $('vege').classList.add('be');
+}
+function villan(id) { const b = $(id); b.classList.add('villan'); setTimeout(() => b.classList.remove('villan'), 700); }
+
+// ------------------------------------------------------------ parancsok
+async function parancs(gomb, fn) {
+  gomb.classList.add('nyomva'); setTimeout(() => gomb.classList.remove('nyomva'), 120);   // azonnali visszajelzés, a válasz előtt
+  const r = await fn();
+  if (r && r.ok === false) naplo(r.hiba || r.valasz || 'Nem sikerült.', r.utkozes ? 'coop' : 'hiba');
+  else if (r?.valasz) naplo(r.valasz, 'jo');
+  return r;
+}
+const kesz = () => E.state.ingatlanok[0].hordok.findIndex(h => h.allapot === 'kesz');
+const PARANCSOK = {
+  szuret: () => E.harvest('tanya').then(r => { if (r.ok) naplo(`Szüret: ${hu(r.kg, 0)} kg.`, 'jo'); return r; }),
+  cefre: () => {
+    const S = E.state, i = S.ingatlanok[0].hordok.findIndex(h => h.allapot === 'ures');
+    const gy = Object.entries(S.keszlet.gyumolcs).sort((a, b) => b[1].kg - a[1].kg)[0];
+    if (i < 0) return { ok: false, hiba: 'Nincs üres hordó.' };
+    if (!gy || gy[1].kg < 5) return { ok: false, hiba: 'Előbb szüretelj.' };
+    return E.fillBarrel('tanya', i, { gyumolcs: gy[0], kg: Math.min(20, gy[1].kg), adalek: S.keszlet.cikkek.eleszto ? ['eleszto'] : [] });
+  },
+  fozes: () => { const i = kesz(); return i < 0 ? { ok: false, hiba: 'Nincs kész cefre (a házigazda „+3 óra” gombja gyorsít).' } : E.startStill('tanya', 0, i, 'kezi'); },
+  dunyhaba: () => E.stash(1000),
+  alvas: () => E.sleep().then(r => { if (r.ok) naplo('Kialudta magát a falu.', 'jo'); return r; }),
+  ido: () => E.advance(180),
+};
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => parancs(b, PARANCSOK[b.dataset.p]));
+$('vagas').onclick = () => E.cut();
+$('futes').oninput = e => E.setHeat(+e.target.value);
+
+// ------------------------------------------------------------ fő hurok
+let elozo = performance.now(), ui = 0, posT = 0;
+const bentiBillentyu = e => !(e.target instanceof HTMLInputElement && e.target.type !== 'range');
+addEventListener('keydown', e => {
+  if (!bentiBillentyu(e)) return;
+  billentyu.add(e.code);
+  if (e.code === 'Space' && sajatUst()) { e.preventDefault(); E.cut(); }
+});
+addEventListener('keyup', e => billentyu.delete(e.code));
+function sajatUst() { return coop.szerep === 'host' ? !!(E.s.kezi && coop.meta.berlet?.ki === coop.te) : E.sajatBerlet; }
+
+function keret(most) {
+  if (coop.allapot === 'vege') return;
+  const dt = Math.min(0.1, (most - elozo) / 1000); elozo = most;
+  if (sajatUst()) E.setHeat(+$('futes').value);
+  E.step(dt);
+  const seb = billentyu.has('ShiftLeft') || billentyu.has('ShiftRight') ? BICIKLI : SETA;
+  const dx = (billentyu.has('KeyD') || billentyu.has('ArrowRight')) - (billentyu.has('KeyA') || billentyu.has('ArrowLeft'));
+  const dz = (billentyu.has('KeyS') || billentyu.has('ArrowDown')) - (billentyu.has('KeyW') || billentyu.has('ArrowUp'));
+  if (dx || dz) {
+    const n = Math.hypot(dx, dz);
+    en.x = Math.max(BOUNDS.x0, Math.min(BOUNDS.x1, en.x + dx / n * seb * dt));
+    en.z = Math.max(BOUNDS.z0, Math.min(BOUNDS.z1, en.z + dz / n * seb * dt));
+    en.yaw = Math.atan2(dx, dz);
+  }
+  coop.pozicio(en.x, 0, en.z, en.yaw, 0);
+  if ((posT += dt) > 0.5) { posT = 0; E.setPlayerPos(en.x, en.z); }
+  rajzTerkep(most);
+  if (most - ui > 100) { ui = most; rajzPanelek(); }
+  requestAnimationFrame(keret);
+}
+
+// ------------------------------------------------------------ térkép
+const cv = $('terkep'), g = cv.getContext('2d');
+const SK = cv.width / (BOUNDS.x1 - BOUNDS.x0);
+const px = x => (x - BOUNDS.x0) * SK, pz = z => (z - BOUNDS.z0) * SK;
+let alap = null;
+function alapKep() {
+  const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
+  const k = c.getContext('2d');
+  const gr = k.createLinearGradient(0, 0, 0, c.height); gr.addColorStop(0, '#2a3a1c'); gr.addColorStop(1, '#1d2a14');
+  k.fillStyle = gr; k.fillRect(0, 0, c.width, c.height);
+  for (const r of REGIONS) {
+    const rg = k.createRadialGradient(px(r.center[0]), pz(r.center[1]), 0, px(r.center[0]), pz(r.center[1]), r.r * SK);
+    rg.addColorStop(0, 'rgba(242,180,76,.16)'); rg.addColorStop(1, 'rgba(242,180,76,0)');
+    k.fillStyle = rg; k.beginPath(); k.arc(px(r.center[0]), pz(r.center[1]), r.r * SK, 0, Math.PI * 2); k.fill();
+  }
+  k.fillStyle = '#3d6f8a'; k.fillRect(px(RIVER.x - RIVER.width / 2), 0, RIVER.width * SK, c.height);
+  k.lineCap = 'round';
+  for (const [w, s] of [[7, '#5a4630'], [4, '#9a7a52']]) {
+    k.lineWidth = w; k.strokeStyle = s;
+    for (const [a, b] of ROADS) { k.beginPath(); k.moveTo(px(NODES[a][0]), pz(NODES[a][1])); k.lineTo(px(NODES[b][0]), pz(NODES[b][1])); k.stroke(); }
+  }
+  // a régiónevek az utak fölé, körvonallal, hogy az út ne vágja át őket
+  k.font = '600 19px Georgia, serif'; k.textAlign = 'center'; k.lineJoin = 'round';
+  for (const r of REGIONS) {
+    const X = px(r.center[0]), Z = pz(r.center[1]) - r.r * SK * 0.6;
+    k.lineWidth = 5; k.strokeStyle = 'rgba(18,11,6,.8)'; k.strokeText(r.nev, X, Z);
+    k.fillStyle = 'rgba(243,231,204,.82)'; k.fillText(r.nev, X, Z);
+  }
+  return c;
+}
+function figura(x, z, yaw, szin, nev, sajat) {
+  const X = px(x), Z = pz(z);
+  g.save(); g.translate(X, Z);
+  if (sajat) { g.strokeStyle = 'rgba(243,231,204,.7)'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 17, 0, Math.PI * 2); g.stroke(); }
+  g.rotate(-yaw + Math.PI);
+  g.fillStyle = szin; g.strokeStyle = '#120b06'; g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(0, -14); g.lineTo(10, 10); g.lineTo(0, 5); g.lineTo(-10, 10); g.closePath(); g.fill(); g.stroke();
+  g.restore();
+  g.font = '700 15px system-ui, sans-serif'; g.textAlign = 'center'; g.lineWidth = 4; g.strokeStyle = 'rgba(18,11,6,.85)';
+  g.strokeText(nev, X, Z - 22); g.fillStyle = '#f3e7cc'; g.fillText(nev, X, Z - 22);
+}
+function rajzTerkep(most) {
+  alap ||= alapKep();
+  g.drawImage(alap, 0, 0);
+  const S = E.state;
+  for (const p of S.ingatlanok) {
+    g.fillStyle = p.owned ? '#f2b44c' : 'rgba(243,231,204,.25)'; g.strokeStyle = '#120b06'; g.lineWidth = 2;
+    g.fillRect(px(p.pos[0]) - 8, pz(p.pos[1]) - 8, 16, 16); g.strokeRect(px(p.pos[0]) - 8, pz(p.pos[1]) - 8, 16, 16);
+    if (p.fust) { g.fillStyle = `rgba(220,220,210,${0.25 + 0.15 * Math.sin(most / 300)})`; g.beginPath(); g.arc(px(p.pos[0]) + 6, pz(p.pos[1]) - 16, 7, 0, 7); g.fill(); }
+  }
+  const lista = coop.jatekosok;
+  lista.forEach((j, i) => {
+    if (j.en) return;
+    const p = coop.jatekosPoz(j.id, most);
+    if (p) figura(p.x, p.z, p.yaw, SZINEK[i % 4], j.nev + (j.online ? '' : ' (kiesett)'), false);
+  });
+  const i = lista.findIndex(j => j.en);
+  figura(en.x, en.z, en.yaw, SZINEK[i % 4], 'Te', true);
+}
+
+// ------------------------------------------------------------ panelek
+function rajzJatekosok() {
+  const kulcs = JSON.stringify([coop.jatekosok.map(j => [j.id, j.nev, j.online, j.host]), coop.meta.berlet?.ki, coop.meta.berlet?.arva]);
+  if ($('jatekosok')._kulcs === kulcs) return;
+  $('jatekosok')._kulcs = kulcs;
+  $('jatekosok').innerHTML = '';
+  coop.jatekosok.forEach((j, i) => {
+    const d = document.createElement('div'); d.className = 'jatekos' + (j.online ? '' : ' off');
+    d.innerHTML = `<i style="background:${SZINEK[i % 4]}"></i><span></span><span class="cimke"></span>`;
+    d.children[1].textContent = j.nev + (j.en ? ' (te)' : '');
+    d.children[2].textContent = [j.host ? 'házigazda' : '', j.online ? '' : 'kiesett', coop.meta.berlet?.ki === j.id ? 'üstnél' : ''].filter(Boolean).join(' · ');
+    $('jatekosok').append(d);
+  });
+}
+let elozoKp = null;
+function rajzPanelek() {
+  const S = E.state;
+  $('ido').textContent = S.ido.szoveg;
+  const k = $('kapcsolat');
+  k.className = coop.allapot === 'szoba' ? '' : 'rossz';
+  k.innerHTML = `<b>${{ szoba: 'kapcsolódva', ujra: 'újracsatlakozás…', hostNelkul: 'házigazda nélkül', vege: 'vége' }[coop.allapot] || coop.allapot}</b>` +
+    (coop.rtt != null ? ` · relé ${Math.round(coop.rtt)} ms` : '') +
+    (coop.szerep === 'kliens' ? ` · delta ${hu(coop.stat.deltaBajt / ((performance.now() - coop.stat.kezdet) / 1000), 0)} B/s` : '');
+  $('kp').textContent = ft(S.penz.kp); $('dunyha').textContent = ft(S.penz.dunyha); $('szamla').textContent = ft(S.penz.szamla);
+  if (elozoKp != null && S.penz.kp > elozoKp) villan('kp');
+  elozoKp = S.penz.kp;
+  // készlet: gyümölcs, cefre, tételek
+  const sorok = [];
+  for (const [gy, v] of Object.entries(S.keszlet.gyumolcs)) if (v.kg > 0) sorok.push([`${gy}: ${v.kg} kg (minőség ${v.q})`]);
+  S.ingatlanok[0].hordok.forEach((h, i) => { if (h.allapot !== 'ures') sorok.push([`${i + 1}. hordó: ${hu(h.l, 0)} l ${h.gyumolcs}cefre — ${h.allapot === 'kesz' ? 'kész' : `még ${Math.ceil(h.hatra / 60)} óra`}`]); });
+  for (const t of S.tetelek) sorok.push([`${t.nev}: ${hu(t.l, 2)} l, ${hu(t.fok, 0)} fok, q ${t.q} — ${t.hely === 'nalad' ? 'nálatok' : 'a tanyán'}`, t.hely === 'nalad' ? null : ['Magadhoz', () => E.carry(t.id)]]);
+  lista($('keszlet'), sorok, 'Üres a kamra. Kezdd a szürettel.');
+  const rend = S.rendelesek.map(r => {
+    const t = S.tetelek.find(x => x.l >= r.l);
+    const gomb = r.allapot === 'uj' ? ['Elfogad', () => E.acceptOrder(r.id)]
+      : t ? ['Átad', () => E.deliver(r.id, t.id, r.l, Math.max(r.ar, E.value(t.id, r.l, r.vevo)))] : null;
+    return [`${r.nev}: ${hu(r.l)} l ${r.gyumolcs || 'bármilyen'}, ${ft(r.ar)}, ${r.helyNev}`, gomb];
+  });
+  lista($('rendelesek'), rend, 'Még nem jött rendelés.');
+  // üst
+  const u = S.keziUst, sajat = sajatUst();
+  $('ust').classList.toggle('be', !!u);
+  if (u) {
+    $('ustcim').textContent = sajat ? 'A te üstöd' : `${nevE(coop.meta.berlet?.ki)} főz${coop.meta.berlet?.arva ? ' (gazdátlan, hűl)' : ''}`;
+    $('ustfazis').textContent = `${hu(u.homerseklet, 0)} °C · ${u.fazis} · ${hu(u.liter, 2)} l, ${hu(u.fok, 0)} fok, minőség ${u.minoseg}`;
+    $('homero').style.width = `${Math.min(100, Math.max(0, (u.homerseklet - 20) / 92 * 100))}%`;
+    $('haladas').style.width = `${u.haladas * 100}%`;
+    $('futes').disabled = $('vagas').disabled = !sajat;
+  }
+  rajzJatekosok();
+}
+function lista(ul, sorok, ures) {
+  // csak változáskor építjük újra: a 100 ms-os frissítés különben a lenyomott gombot cserélné ki (elveszne a kattintás)
+  const kulcs = JSON.stringify(sorok.map(([s, g]) => [s, g?.[0]]));
+  if (ul._kulcs === kulcs) return;
+  ul._kulcs = kulcs;
+  ul.innerHTML = '';
+  if (!sorok.length) { ul.innerHTML = `<li class="ures">${ures}</li>`; return; }
+  for (const [szoveg, gomb] of sorok) {
+    const li = document.createElement('li'); const s = document.createElement('span'); s.textContent = szoveg; li.append(s);
+    if (gomb) { const b = document.createElement('button'); b.textContent = gomb[0]; b.onclick = () => parancs(b, gomb[1]); li.append(b); }
+    ul.append(li);
+  }
+}
+</script>
+</body>
+</html>

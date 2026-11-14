@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Kisüsti — világpróba</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1628; font-family: Georgia, 'Times New Roman', serif; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 14px; top: 12px; color: #f4ecd8; font-size: 14px; text-shadow: 0 1px 2px #000a; pointer-events: none; line-height: 1.45; }
+  #hud b { font-size: 18px; letter-spacing: 0.02em; }
+  #meres { position: fixed; right: 12px; top: 10px; color: #f4ecd8c0; font: 12px ui-monospace, Menlo, monospace; text-align: right; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  #sugo { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); color: #f4ecd8; font-size: 15px; background: #1a1410b0; padding: 6px 14px; border-radius: 6px; pointer-events: none; }
+  #sugo:empty { display: none; }
+  #celkereszt { position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 2px; background: #fff8; pointer-events: none; }
+  #toltes { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #e8dcc0; font-size: 18px; background: #0d1628; }
+  #toltes .sav { width: 320px; height: 6px; background: #ffffff20; margin-top: 12px; border-radius: 3px; overflow: hidden; }
+  #toltes .sav i { display: block; height: 100%; width: 0; background: #d8a85a; }
+  .lbl { position: fixed; transform: translate(-50%, -100%); color: #fff; font: bold 13px system-ui, sans-serif; text-shadow: 0 1px 3px #000; white-space: pre; text-align: center; pointer-events: none; }
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<div id="toltes"><div>Kisüsti — a világ épül…</div><div class="sav"><i id="savi"></i></div><div id="fazis" style="font-size:13px;margin-top:8px;opacity:.7"></div></div>
+<div id="hud"></div>
+<div id="meres"></div>
+<div id="celkereszt"></div>
+<div id="sugo"></div>
+<div id="labels"></div>
+<script type="module">
+import * as THREE from 'three';
+import { epitVilag } from './js/vilag/index.js';
+import { Jatekos, Bemenet } from './js/jatekos.js';
+import { JarmuKezelo } from './js/jarmu.js';
+import { NpcRendszer, ut } from './js/npc.js';
+
+const Q = new URLSearchParams(location.search);
+const TEST = Q.has('teszt') || navigator.webdriver;
+const $ = id => document.getElementById(id);
+
+// grafika: ki (a Grafika nélküli alapállapot, összevetéshez) | alacsony | kozepes | magas (alap)
+const GRAFIKA = Q.get('grafika') || 'magas';
+const renderer = new THREE.WebGLRenderer({ antialias: (!TEST || Q.has('aa')) && (GRAFIKA === 'ki' || GRAFIKA === 'alacsony'), preserveDrawingBuffer: TEST, powerPreference: 'high-performance' });
+renderer.setPixelRatio(TEST ? 1 : Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.info.autoReset = false;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.08, 2300);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); G?.resize(); });
+let G = null;
+
+const t0 = performance.now();
+const V = await epitVilag(scene, { onProgress: (f, k, n) => { $('savi').style.width = (k / n * 100) + '%'; $('fazis').textContent = `${f}: ${k}/${n}`; } });
+const bemenet = new Bemenet(renderer.domElement);
+const jatekos = new Jatekos(camera, V, bemenet);
+jatekos.hely(0, 6, 0, -4);
+const jarmuvek = new JarmuKezelo(V, jatekos, camera, bemenet, scene);
+const npc = new NpcRendszer(V, scene);
+npc.indit({ gyalogos: 14, auto: 5 });
+// a Grafika (utófeldolgozás, fű, szél, füst, kontaktárnyék) — 'ki' esetén be sem töltődik (a shader-foltjai sem)
+if (GRAFIKA !== 'ki') {
+  const { Grafika } = await import('./js/grafika/index.js');
+  G = new Grafika(renderer, scene, camera, { minoseg: GRAFIKA, vilag: V });
+  for (const n of npc.lista) G.kontakt(n.obj, n.tipus === 'gyalogos' ? 0.42 : 1.1, n.tipus === 'gyalogos' ? 0.42 : 2.2);
+  for (const v of jarmuvek.lista) G.kontakt(v.obj, v.tipus === 'auto' ? 1.05 : 0.35, v.tipus === 'auto' ? 2.1 : 0.95);
+}
+// az első képkocka (shader-fordítás) is a betöltés része
+V.update(0, 10, camera.position, camera);
+G?.update(0, 10);
+V.lodMost(camera.position);
+renderer.compile(scene, camera);
+if (G) G.render(); else renderer.render(scene, camera);
+const betoltes = Math.round(performance.now() - t0);
+$('toltes').remove();
+
+// ---- óra (tesztben kézzel; játékban gyorsítva: 1 valós mp = 6 játékperc)
+let ora = Number(Q.get('ora') ?? 10), oraSeb = TEST ? 0 : 0.1;
+let fpsSz = 0, fpsT = 0, fps = 0;
+
+// ---- címkék (DOM)
+const lbls = V.cimkek.map(L => { const el = document.createElement('div'); el.className = 'lbl'; el.textContent = L.text; el.style.fontSize = L.size + 'px'; $('labels').appendChild(el); return { ...L, el }; });
+const pv = new THREE.Vector3();
+function cimkek() {
+  for (const L of lbls) {
+    L.obj.getWorldPosition(pv); pv.y += L.off;
+    const d = pv.distanceTo(camera.position);
+    pv.project(camera);
+    const vis = d < 14 && pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1 && L.obj.visible;
+    L.el.style.display = vis ? '' : 'none';
+    if (vis) { L.el.style.left = ((pv.x + 1) / 2 * innerWidth) + 'px'; L.el.style.top = ((1 - pv.y) / 2 * innerHeight) + 'px'; L.el.style.opacity = Math.min(1, (14 - d) / 4); }
+  }
+}
+
+function step(dt) {
+  ora = (ora + dt * oraSeb) % 24;
+  if (!jarmuvek.vezet) jatekos.update(dt);
+  jarmuvek.update(dt);
+  npc.update(dt, camera.position);
+  V.update(dt, ora, camera.position, camera);
+  G?.update(dt, ora);
+}
+function render() {
+  renderer.info.reset();
+  if (G) G.render(); else renderer.render(scene, camera);
+  if (!TEST) cimkek();
+}
+function hud() {
+  const p = jarmuvek.vezet ? jarmuvek.vezet.obj.position : jatekos.pos;
+  const r = V.regioNal(p.x, p.z);
+  const hh = Math.floor(ora), mm = Math.floor((ora % 1) * 60);
+  $('hud').innerHTML = `<b>${r ? r.nev : 'Határ'}</b><br>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` +
+    (jarmuvek.vezet ? ` · ${Math.round(Math.abs(jarmuvek.vezet.seb) * 3.6)} km/h` : '');
+  $('meres').textContent = `${G ? G.minoseg : 'grafika ki'} · ${fps} fps · ${renderer.info.render.calls} rajzhívás · ${(renderer.info.render.triangles / 1000).toFixed(0)}k háromszög\n${Math.round(p.x)}, ${Math.round(p.z)} · betöltés ${betoltes} ms`;
+  $('sugo').textContent = jarmuvek.sugo();
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  fpsSz++; fpsT += now - (frame.prev || now); frame.prev = now;
+  if (fpsT > 500) { fps = Math.round(fpsSz * 1000 / fpsT); fpsSz = 0; fpsT = 0; }
+  step(dt); render(); hud();
+  bemenet.kockaVege();
+  requestAnimationFrame(frame);
+}
+// G: minőségváltás (alacsony → közepes → magas)
+addEventListener('keydown', e => { if (e.code === 'KeyG' && G) { const L = ['alacsony', 'kozepes', 'magas']; G.setMinoseg(L[(L.indexOf(G.minoseg) + 1) % 3]); } });
+if (!TEST) requestAnimationFrame(frame);
+else { render(); hud(); }
+
+// ---- tesztkampók (Playwright)
+window.__vilag = {
+  V, jatekos, jarmuvek, npc, ut, betoltes,
+  /** A kamera (gyalogos) helye és nézése fokban. */
+  hely(x, z, yaw = 0, pitch = 0) { if (jarmuvek.vezet) jarmuvek.kiszall(true); jatekos.hely(x, z, yaw, pitch); V.lodMost(camera.position); V.update(0, ora, camera.position, camera); if (G) { G.fu?.mostMind(camera.position); G.update(0, ora); } render(); hud(); return [x, jatekos.pos.y, z]; },
+  /** A kamera r méteres körében járó gyalogosok elrejtése (képkészítéshez: ne takarjon előtérben figura). */
+  npcTavol(r = 9) { const c = camera.position; for (const n of npc.lista) { n.rejt = n.tipus === 'gyalogos' && Math.hypot(n.obj.position.x - c.x, n.obj.position.z - c.z) < r; if (n.rejt) n.obj.visible = false; } render(); },
+  /** Több gomb együtt, dur mp-ig (pl. ['KeyW', 'KeyD']). */
+  gombok(codes, dur) { for (const c of codes) { bemenet.keys.add(c); bemenet.lenyomva.add(c); } this.lep(dur); for (const c of codes) bemenet.keys.delete(c); render(); hud(); },
+  /** Állás (x, z) a talajon, nézés a (tx, ty, tz) pontra. */
+  nez(x, z, tx, ty, tz) {
+    // ty a célpont alatti talajhoz képest (v4: a domborzat már nem nulla szinten van)
+    const y = V.talaj(x, z) + 1.65, dx = tx - x, dy = V.talaj(tx, tz) + ty - y, dz = tz - z;
+    const yaw = Math.atan2(-dx, -dz) * 180 / Math.PI, pitch = Math.atan2(dy, Math.hypot(dx, dz)) * 180 / Math.PI;
+    return this.hely(x, z, yaw, pitch);
+  },
+  /** Idő léptetése (30 Hz-es lépésekkel), aztán egy rajzolás. */
+  lep(sec) { const n = Math.max(1, Math.round(sec * 30)); for (let i = 0; i < n; i++) { step(1 / 30); bemenet.kockaVege(); } render(); hud(); },
+  ora(h) { ora = h; V.update(0, ora, camera.position, camera); G?.update(0, ora); render(); return ora; },
+  /** A Grafika (null, ha ?grafika=ki). */
+  get G() { return G; },
+  /** Átlagos fps n képkockán (rajzolással), és a képkocka-idő. */
+  fps(n = 30) {
+    // a GPU-t minden képkocka után egy pixel visszaolvasásával szinkronizáljuk (különben csak a parancsok sorba állítását mérnénk)
+    const gl = renderer.getContext(), px = new Uint8Array(4), sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    render(); sync();
+    const t = performance.now(); for (let i = 0; i < n; i++) { step(1 / 60); render(); sync(); }
+    const ms = (performance.now() - t) / n; return { fps: Math.round(1000 / ms * 10) / 10, ms: Math.round(ms * 10) / 10 };
+  },
+  /** GPU-idő képkockánként (ms, medián és p90) időmérő lekérdezéssel — a CPU-terheléstől független, ezért
+   *  terhelt gépen ez a megbízható szám. null, ha a böngésző nem adja az EXT_disjoint_timer_query_webgl2-t. */
+  async gpuMs(n = 40) {
+    const gl = renderer.getContext(), ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    if (!ext) return null;
+    render(); const qs = [];
+    for (let i = 0; i < n; i++) {
+      step(1 / 60);
+      const q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); render(); gl.endQuery(ext.TIME_ELAPSED_EXT); qs.push(q);
+      await new Promise(r => setTimeout(r, 0));
+    }
+    const out = [];
+    for (const q of qs) {
+      for (let k = 0; k < 400 && !gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE); k++) await new Promise(r => setTimeout(r, 5));
+      if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) out.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+      gl.deleteQuery(q);
+    }
+    out.sort((a, b) => a - b);
+    return out.length ? { median: Math.round(out[out.length >> 1] * 100) / 100, p90: Math.round(out[Math.floor(out.length * 0.9)] * 100) / 100, n: out.length } : null;
+  },
+  drawCalls() { render(); return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometriak: renderer.info.memory.geometries, texturak: renderer.info.memory.textures, programok: renderer.info.programs.length }; },
+  /** Gombnyomás szimulálása (pl. 'KeyE'), dur mp-ig nyomva. */
+  gomb(code, dur = 0) { bemenet.keys.add(code); bemenet.lenyomva.add(code); if (dur) this.lep(dur); else { step(1 / 30); bemenet.kockaVege(); } bemenet.keys.delete(code); render(); hud(); },
+  beszall(tipus) { return jarmuvek.beszall(tipus, true); },
+  kiszall() { jarmuvek.kiszall(true); },
+  kameraMod(m) { jarmuvek.kameraMod = m; jarmuvek.update(0); render(); },
+  allapot() { const p = jarmuvek.vezet ? jarmuvek.vezet.obj.position : jatekos.pos; return { x: p.x, y: p.y, z: p.z, regio: V.regioNal(p.x, p.z)?.id ?? null, jarmu: jarmuvek.vezet?.tipus ?? null, seb: jarmuvek.vezet ? jarmuvek.vezet.seb : 0, ora }; },
+  idok: V.idok, stat: V.stat,
+  /** Rajzhívás-bontás kategóriánként (a kamera látógúlájában lévő, látható hálók; anyagonként egy hívás). */
+  bontas() {
+    camera.updateMatrixWorld(); scene.updateMatrixWorld();
+    const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const L = V.eg.nap.shadow.camera; L.updateMatrixWorld(); L.updateProjectionMatrix();
+    const frS = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(L.projectionMatrix, L.matrixWorldInverse));
+    const by = {}, sh = {};
+    const kat = o => { for (let p = o; p; p = p.parent) { if (p.name && /^(epulet|kozep|kis|fa|bokor|ablak):/.test(p.name)) return p.name.split(':')[0]; if (p.parent === scene) return p.name || (p.userData.kind ? 'cel:' + p.userData.kind : p.type); } return '?'; };
+    scene.traverseVisible(o => {
+      if (!(o.isMesh || o.isPoints || o.isLine)) return;
+      const n = Array.isArray(o.material) ? o.material.length : 1, k = kat(o);
+      if (!o.frustumCulled || fr.intersectsObject(o)) by[k] = (by[k] || 0) + n;
+      if (o.castShadow && (!o.frustumCulled || frS.intersectsObject(o))) sh[k] = (sh[k] || 0) + n;
+    });
+    return { kamera: by, arnyek: sh };
+  },
+  render,
+};
+</script>
+</body>
+</html>

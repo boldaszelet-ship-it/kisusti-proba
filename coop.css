@@ -1,0 +1,64 @@
+/* Kisüsti — a közös játék felülete: a kezdőképernyő panelje, a sarokjelvény, a coop-szalag, a társak neve.
+   A #start borostyán–barna nyelvét viszi tovább (Georgia, #e8a54a); játék közben a .ku-kartya-hoz igazodik. */
+
+/* ---------------------------------------------------------------- kezdőképernyő panel */
+#start .coop { width: min(640px, 92vw); display: flex; flex-direction: column; align-items: stretch; gap: 14px; text-align: left;
+  padding: 26px 30px 22px; border: 1px solid rgba(232,165,74,.45); border-radius: 18px;
+  background: linear-gradient(180deg, rgba(42,26,15,.92), rgba(20,13,8,.94)); box-shadow: 0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,220,160,.08);
+  animation: coop-be .22s cubic-bezier(.2,.9,.3,1); }
+#start .coop[hidden] { display: none; }
+@keyframes coop-be { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+#start .coop h2 { margin: 0; font: 700 34px Georgia, serif; color: #e8a54a; letter-spacing: .04em; text-align: center; }
+#start .coop h3 { margin: 0 0 8px; font: 600 13px system-ui; letter-spacing: .14em; text-transform: uppercase; color: #cdb48c; }
+#start .coop .coop-al { text-align: center; font: italic 17px Georgia, serif; opacity: .85; margin-top: -6px; }
+#start .coop-nincs { padding: 12px 16px; border-radius: 10px; border: 1px solid rgba(236,106,80,.6); background: rgba(236,106,80,.12); color: #f6c9b8; font: 600 16px system-ui; text-align: center; }
+#start .coop-nincs[hidden] { display: none; }
+#start .coop-nincs small { display: block; margin-top: 4px; font: 400 13px system-ui; opacity: .8; }
+#start .coop code { font: 13px ui-monospace, Menlo, monospace; color: #f2d7a8; }
+#start .coop label.coop-nev { display: flex; align-items: center; gap: 12px; font: 600 15px system-ui; color: #cdb48c; }
+#start .coop input { font: 600 18px system-ui; color: #f3eee4; background: rgba(0,0,0,.35); border: 1px solid rgba(232,165,74,.45); border-radius: 10px; padding: 9px 12px; outline: none; min-width: 0; }
+#start .coop input:focus-visible { border-color: #e8a54a; box-shadow: 0 0 0 3px rgba(232,165,74,.25); }
+#start .coop label.coop-nev input { flex: 1; }
+#start .coop-ket { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+#start .coop-ket[hidden] { display: none; }
+#start .coop-ket section { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid rgba(232,165,74,.18); }
+#start .coop button { min-width: 0; width: 100%; }
+#start .coop button:disabled { opacity: .4; cursor: default; transform: none; background: rgba(232,165,74,.04); }
+#start .coop button.kicsi { width: auto; padding: 8px 18px; font-size: 15px; }
+#start .coop #coop-kod { text-align: center; font: 700 26px ui-monospace, Menlo, monospace; letter-spacing: .4em; text-transform: uppercase; padding-left: .4em; }
+#start .coop-szoba { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#start .coop-szoba[hidden] { display: none; }
+#start .coop-kodcim { font: 600 14px system-ui; color: #cdb48c; }
+#start .coop-kodsor { display: flex; gap: 10px; align-items: center; }
+#start .coop #coop-kodki { width: 6.2em; text-align: center; font: 800 44px ui-monospace, Menlo, monospace; letter-spacing: .28em; padding: 6px 4px 6px .38em; color: #f2b44c; }
+#start .coop ul { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; font: 600 16px system-ui; }
+#start .coop li { display: flex; align-items: center; gap: 7px; }
+#start .coop li i, .coop-jel-sor i { width: 9px; height: 9px; border-radius: 50%; background: #a3cc6e; box-shadow: 0 0 6px rgba(163,204,110,.7); flex: none; }
+#start .coop li.ki i, .coop-jel-sor.ki i { background: #776a5a; box-shadow: none; }
+#start .coop li small, .coop-jel small { font: 400 12px system-ui; color: #cdb48c; }
+#start .coop-allapot { min-height: 20px; text-align: center; font: 600 15px system-ui; color: #cdb48c; }
+#start .coop-allapot.hiba { color: #ec6a50; }
+#start .coop #coop-vissza { align-self: center; }
+#start:has(.coop:not([hidden])) .bill { display: none; }   /* a nyitott panel alja ne üljön rá a billentyűsorra */
+
+/* ---------------------------------------------------------------- játék közben */
+.coop-jel { position: fixed; left: clamp(14px, 2.3vh, 30px); bottom: clamp(14px, 2.3vh, 30px); z-index: 49; pointer-events: none; min-width: 11em;
+  padding: .45em .75em; border-radius: .55em; border: 1px solid rgba(220,149,80,.42); background: linear-gradient(180deg, rgba(38,24,14,.9), rgba(18,11,6,.9));
+  box-shadow: 0 .25em .9em rgba(0,0,0,.45); color: #f3e7cc; text-shadow: 0 1px 2px #000; font: 600 clamp(14px, 1.7vh, 18px)/1.35 system-ui, sans-serif; }
+.coop-jel-fej { display: flex; align-items: baseline; gap: .5em; margin-bottom: .15em; }
+.coop-jel-fej span { color: #cdb48c; font-weight: 500; }
+.coop-jel-fej b { font: 800 1.15em ui-monospace, Menlo, monospace; letter-spacing: .14em; color: #f2b44c; }
+.coop-jel-fej em { font-style: normal; color: #ec6a50; font-size: .88em; }
+.coop-jel-sor { display: flex; align-items: center; gap: .45em; }
+.coop-jel-sor.ki { opacity: .55; }
+body.modal .coop-jel { opacity: .25; }
+#start:not(.ki) ~ .coop-jel { display: none; }
+
+.coop-szalag { position: fixed; left: 50%; top: 6.5vh; z-index: 49; transform: translate(-50%, -.6em); opacity: 0; pointer-events: none; max-width: 80vw;
+  padding: .5em 1.4em .55em; border-radius: 2em; background: rgba(18,11,6,.88); border: 1px solid rgba(232,165,74,.55); color: #f3e7cc;
+  font: 600 clamp(15px, 1.9vh, 20px) system-ui, sans-serif; text-shadow: 0 1px 2px #000; transition: opacity .2s ease-in, transform .2s ease-in; }
+.coop-szalag.be { opacity: 1; transform: translate(-50%, 0); transition: opacity .18s ease-out, transform .25s cubic-bezier(.2,.9,.3,1); }
+
+/* a társ neve a feje fölött: borostyán, hogy elüssön a falusiak fehér feliratától */
+.lbl.tars { color: #ffd38a; font-weight: 700; letter-spacing: .02em; }
+.lbl.tars.ki { color: #b9ab98; font-style: italic; }

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Kisüsti — szereplőpróba</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1a17; font-family: Georgia, 'Times New Roman', serif; }
+  canvas { display: block; }
+  #fej { position: fixed; left: 16px; top: 12px; color: #f4ecd8; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  #fej b { font-size: 20px; } #fej span { font-size: 13px; opacity: .85; }
+  #meres { position: fixed; right: 12px; top: 10px; color: #f4ecd8d0; font: 12px ui-monospace, Menlo, monospace; text-align: right; pointer-events: none; text-shadow: 0 1px 2px #000; white-space: pre; }
+  #gombok { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; max-width: 96vw; }
+  #gombok button { font: 12px system-ui, sans-serif; background: #2b2620e0; color: #f4ecd8; border: 1px solid #f4ecd840; border-radius: 5px; padding: 4px 9px; cursor: pointer; }
+  #gombok button.on { background: #b9853d; color: #1b1a17; }
+  #gombok .sep { width: 100%; height: 0; }
+  .lbl { position: fixed; transform: translate(-50%, 0); color: #f4ecd8; font: 11px system-ui, sans-serif; text-shadow: 0 1px 3px #000, 0 0 2px #000; white-space: pre; text-align: center; pointer-events: none; line-height: 1.2; }
+  .lbl b { font-size: 12px; }
+  body.teszt #gombok { display: none; }
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<div id="fej"><b>Kisüsti — szereplők</b><br><span id="alcim"></span></div>
+<div id="meres"></div>
+<div id="gombok"></div>
+<div id="labels"></div>
+<script type="module">
+import * as THREE from 'three';
+import { szereplokBetolt, szereplo, Szereplo, ANYAG } from './js/szereplok/szereplo.js';
+import { KIOSZTAS, falusi } from './js/szereplok/kiosztas.js';
+import { kupica, palinkasUveg } from './js/szereplok/kiegeszitok.js';
+import { VEVOK_TELJES, TERJESZTOK, SZEREPEK, BESUGOK } from './data/tartalom.js';
+import { SUPPLIERS } from './data/regions.js';
+
+const Q = new URLSearchParams(location.search);
+const TESZT = Q.has('teszt');
+if (TESZT) document.body.classList.add('teszt');
+const $ = id => document.getElementById(id);
+window.onerror = (m, f, l) => { window.__hiba = String(m) + ' @' + l; };
+window.onunhandledrejection = e => { window.__hiba = String(e.reason?.stack || e.reason); };
+
+// ------------------------------------------------------------ nevek a feliratokhoz
+const NEV = {};
+for (const v of VEVOK_TELJES) NEV[v.id] = v.nev;
+for (const t of TERJESZTOK) NEV[t.id] = t.nev;
+NEV.unokaocs = SZEREPEK.unokaocs.nev; NEV.neni = SZEREPEK.neni.nev; NEV.feri = SZEREPEK.feri.nev; NEV.sogor_alk = 'Sógor (alkalmazott)';
+NEV.penzugyor = 'a pénzügyőr'; NEV.penzugyor2 = 'a fiatal pénzügyőr';
+for (const r in BESUGOK) NEV['besugo_' + r] = BESUGOK[r].nev;
+for (const s of SUPPLIERS || []) if (KIOSZTAS[s.id]) NEV[s.id] = s.nev;
+const IDK = Object.keys(KIOSZTAS);
+
+// ------------------------------------------------------------ jelenet
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(TESZT ? 1 : Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9db4c4); scene.fog = new THREE.Fog(0x9db4c4, 40, 140);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 400);
+const hemi = new THREE.HemisphereLight(0xe4ecf2, 0x6a5a40, 1.35); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d6, 2.6); sun.position.set(6, 10, 9); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 12, bottom: -8, near: 1, far: 60 }); scene.add(sun); scene.add(sun.target);
+const fill = new THREE.DirectionalLight(0xc8d8ff, 0.5); fill.position.set(-6, 4, -4); scene.add(fill);
+const talaj = new THREE.Mesh(new THREE.CircleGeometry(80, 48), new THREE.MeshLambertMaterial({ color: 0x8c7f5e }));
+talaj.rotation.x = -Math.PI / 2; talaj.receiveShadow = true; scene.add(talaj);
+
+await szereplokBetolt();
+Szereplo.kamera = cam.position;
+const figurak = [];
+const cimkek = [];
+function tesz(id, x, z, ry = 0, felirat = null) {
+  const sz = szereplo(id);
+  sz.obj.position.set(x, 0, z); sz.obj.rotation.y = ry; scene.add(sz.obj);
+  figurak.push(sz);
+  if (felirat !== false) cimkek.push({ sz, txt: felirat ?? `<b>${NEV[id] || id}</b>\n${id}` });
+  return sz;
+}
+function cimkez(y = -0.08) {
+  $('labels').innerHTML = '';
+  for (const c of cimkek) {
+    const v = c.sz.obj.position.clone(); v.y += y; v.project(cam);
+    if (v.z > 1) continue;
+    const d = document.createElement('div'); d.className = 'lbl';
+    d.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; d.style.top = ((1 - v.y) / 2 * innerHeight + 2) + 'px';
+    d.innerHTML = c.txt; $('labels').appendChild(d);
+  }
+}
+function nezo(px, py, pz, tx, ty, tz, fov = 30) { cam.position.set(px, py, pz); cam.fov = fov; cam.updateProjectionMatrix(); cam.lookAt(tx, ty, tz); kozep.set(tx, ty, tz); }
+const leptet = (sec, dt = 1 / 30) => { for (let t = 0; t < sec; t += dt) for (const f of figurak) f.update(dt); };
+
+// ------------------------------------------------------------ nézetek
+const nezet = Q.get('nezet') || 'tablo';
+const kozep = new THREE.Vector3();
+const ANIMOK = ['all', 'setal', 'fut', 'integet', 'atad', 'iszik', 'koccint', 'ul', 'beszel', 'ijedt', 'szid', 'orul', 'tancol', 'setal_hivatalos', 'felvesz', 'vezet'];
+let info = {};
+let alcim = '';
+
+if (nezet === 'ual') {
+  // fejlesztői összevetés: a forrás-manöken (UAL) a saját klipjével, mellette az átvitt figurák
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const u = await new GLTFLoader().loadAsync('models/szereplok/_ual_debug.glb');
+  u.scene.position.x = -1.2; scene.add(u.scene); u.scene.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const m = new THREE.AnimationMixer(u.scene); const cl = u.animations.find(c => c.name === (Q.get('klip') || 'Idle_Loop')); m.clipAction(cl).play(); m.update(+(Q.get('t') || 0.5));
+  tesz('kovacs', 0, 0, 0); tesz('marika', 1.2, 0, 0);
+  figurak.forEach(f => { f.anim(Q.get('anim') || 'all', { atmenet: 0.001 }); f.mixer.update(+(Q.get('t') || 0.5)); });
+  nezo(+(Q.get('cx') || 0), 1.1, 7, 0, 0.9, 0, 30);
+  alcim = 'forrás (UAL-manöken) ↔ átvitt figurák';
+} else if (nezet === 'tablo') {
+  const sorok = [IDK.slice(0, 24), IDK.slice(24, 44), IDK.slice(44)];
+  sorok.forEach((sor, si) => sor.forEach((id, i) => tesz(id, (i - (sor.length - 1) / 2) * 0.78, -si * 2.6 + 1.0, 0, false)));
+  leptet(0.6);
+  nezo(0, 3.6, 20.5, 0, 0.45, -1.8, 34);
+  alcim = `mind a ${IDK.length} figura: 44 vevő · 7 terjesztő · 4 alkalmazott · 2 pénzügyőr · 6 besúgó · 5 beszállító`;
+} else if (nezet === 'kozeli') {
+  const lap = +(Q.get('lap') || 0), per = 10;
+  const ids = IDK.slice(lap * per, lap * per + per);
+  ids.forEach((id, i) => tesz(id, (i - (ids.length - 1) / 2) * 0.86, 0, 0));
+  leptet(0.5);
+  nezo(0, 1.25, 10.2, 0, 0.92, 0, 30);
+  alcim = `közeli tabló ${lap + 1}/${Math.ceil(IDK.length / per)} — egész alak, név és tartalom-id`;
+} else if (nezet === 'testek') {
+  const T = [];
+  for (const nem of ['f', 'n']) for (const [kor, alkat] of [['fiatal', 'vekony'], ['fiatal', 'atlag'], ['kozep', 'atlag'], ['kozep', 'testes'], ['idos', 'vekony'], ['idos', 'pocakos']])
+    T.push({ nem, kor, alkat, ruha: nem === 'f' ? 'ing' : 'polo', haj: nem === 'f' ? (kor === 'idos' ? 'oldalt' : 'rovid') : (kor === 'idos' ? 'konty' : 'felhosszu'), szinek: { felso: 0xb8ae98, also: 0x4a5266 }, seed: 5 });
+  T.forEach((s, i) => tesz(s, (i - 5.5) * 0.76, 0, Q.has('oldal') ? Math.PI / 2 : 0, `<b>${s.nem === 'f' ? 'férfi' : 'nő'}</b>\n${s.kor} · ${s.alkat}`));
+  leptet(0.5);
+  nezo(0, 1.2, 10.5, 0, 0.92, 0, 30);
+  alcim = 'alaptestek: fiatal / középkorú / idős × férfi / nő × vékony / testes (azonos ruhában, hogy a forma látsszon)';
+} else if (nezet === 'sziluett') {
+  const ids = ['penzugyor', 'kovacs', 'marika', 'szeles', 'tibi', 'pityu', 'geza', 'ilonka', 'panni', 'bence', 'jolan', 'dezso'];
+  ids.forEach((id, i) => tesz(id, (i - (ids.length - 1) / 2) * 0.86, 0, 0, `<b>${NEV[id] || id}</b>`));
+  figurak.forEach((f, i) => { if (i % 4 === 1) f.anim('beszel'); f.obj.rotation.y = i % 3 === 2 ? Math.PI / 2 : 0; });
+  leptet(0.9);
+  const fekete = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  for (const f of figurak) { f.mesh.material = fekete; }
+  scene.background = new THREE.Color(0xd8d2c4); scene.fog = null; talaj.material = new THREE.MeshBasicMaterial({ color: 0xd8d2c4 });
+  nezo(0, 1.2, 12.5, 0, 0.92, 0, 30);
+  alcim = 'sziluett-próba: a típus fekete formában is olvasható (pénzügyőr, bácsi, néni, városi, fiatal, munkás)';
+} else if (nezet === 'anim') {
+  const a = Q.get('anim') || 'all';
+  const ids = ['kovacs', 'marika', 'penzugyor', 'tibi', 'jolan', 'szeles', 'ilonka'];
+  const PILL = { iszik: [1.0, 1.3, 1.6, 1.8, 1.45, 1.2, 1.7], koccint: [0.9, 1.0, 2.2, 2.4, 0.8, 2.0, 1.1], atad: [0.8, 1.0, 1.2, 0.9, 1.1, 0.7, 1.3], integet: [0.6, 0.9, 1.2, 0.75, 1.05, 1.35, 0.5], orul: [0.5, 0.7, 0.9, 0.6, 0.8, 1.0, 0.55], felvesz: [0.6, 0.9, 1.2, 1.5, 0.8, 1.1, 1.3] };
+  ids.forEach((id, i) => {
+    const sz = tesz(id, (i - (ids.length - 1) / 2) * 1.05, 0, 0, `<b>${NEV[id] || id}</b>`);
+    if (a === 'iszik' || a === 'koccint') sz.fog(kupica(), 'R');
+    if (a === 'atad') sz.fog(palinkasUveg(), 'R');
+  });
+  leptet(0.35);
+  figurak.forEach((f, i) => { f.anim(a, { atmenet: 0.01 }); f.mixer.update(PILL[a] ? PILL[a][i] : 0.4 + i * 0.37); f.update(0); });
+  const ul = a === 'ul' || a === 'ul_beszel' || a === 'vezet';
+  nezo(2.2, ul ? 1.0 : 1.3, 9.0, 0, ul ? 0.7 : 0.95, 0, 34);
+  alcim = `animáció: ${a}`;
+} else if (nezet === 'nez') {
+  const ids = ['kovacs', 'marika', 'penzugyor', 'tibi', 'jolan', 'szeles', 'ilonka', 'bence'];
+  ids.forEach((id, i) => { const sz = tesz(id, (i - 3.5) * 0.9, 0, (i % 2 ? 0.5 : -0.5), `<b>${NEV[id] || id}</b>`); sz.nez(cam.position); });
+  nezo(4.5, 1.7, 6.5, 0, 1.1, 0, 36);
+  leptet(1.5);
+  alcim = 'nez(kamera): a test másfelé áll, a fej és a nyak a néző felé fordul';
+} else if (nezet === 'pislog') {
+  const ids = ['kovacs', 'marika', 'tibi', 'penzugyor'];
+  ids.forEach((id, i) => tesz(id, (i - 1.5) * 0.42, 0, 0, `<b>${NEV[id] || id}</b>\n${i % 2 ? 'pislog' : 'nyitott szem'}`));
+  leptet(0.4);
+  figurak.forEach((f, i) => { f.pislogT = 99; if (i % 2) { f.pislogD = 1; } f.update(0.001); });
+  if (Q.has('zoom')) { const i = +Q.get('zoom'); const x = (i - 1.5) * 0.42; nezo(x + 0.25, 1.62, 1.1, x, 1.58, 0, 22); }
+  else nezo(0, 1.62, 3.4, 0, 1.55, 0, 24);
+  cimkez(1.3);
+  alcim = 'közeli: arc, szem, szemöldök; a páratlanok pislogás közben';
+} else if (nezet === 'tomeg' || nezet === 'meres') {
+  const n = +(Q.get('n') || 44);
+  const ids = IDK.slice(0, 44);
+  const allok = [];
+  for (let i = 0; i < n; i++) {
+    const id = i < ids.length ? ids[i] : falusi(i);
+    const a = (i / n) * Math.PI * 2 * 3.3, r = 4 + (i % 9) * 2.2;
+    const sz = tesz(id, Math.cos(a) * r, Math.sin(a) * r - 6, a, false);
+    sz.kor = { a, r, v: 0.9 + (i % 5) * 0.15, mozog: i % 3 !== 0 };
+    if (!sz.kor.mozog) sz.anim(['beszel', 'all', 'integet', 'iszik'][i % 4]);
+    allok.push(sz);
+  }
+  nezo(0, 7, 24, 0, 0.8, -6, 40);
+  alcim = `${n} figura egyszerre (a falu-léptékű próba): kétharmaduk sétál, a többi beszél/integet/iszik`;
+  if (nezet === 'meres') {
+    const lep = dt => { for (const f of figurak) { if (f.kor.mozog) { f.kor.a += f.kor.v * dt / f.kor.r; f.obj.position.set(Math.cos(f.kor.a) * f.kor.r, 0, Math.sin(f.kor.a) * f.kor.r - 6); f.obj.rotation.y = -f.kor.a; f.halad(f.kor.v); } f.update(dt); } };
+    for (let i = 0; i < 10; i++) { lep(1 / 60); renderer.render(scene, cam); }
+    const N = 60; let cpu = 0; const t0 = performance.now();
+    for (let i = 0; i < N; i++) { const a = performance.now(); lep(1 / 60); cpu += performance.now() - a; renderer.render(scene, cam); }
+    renderer.getContext().finish();
+    const ms = (performance.now() - t0) / N;
+    info = { n, ms_kepkocka: +ms.toFixed(2), ms_anim_cpu: +(cpu / N).toFixed(3), rajzhivas: renderer.info.render.calls, haromszog: renderer.info.render.triangles, geometria: renderer.info.memory.geometries };
+    alcim += ` — mérés: ${JSON.stringify(info)}`;
+  } else {
+    for (const f of figurak) if (f.kor.mozog) f.halad(f.kor.v);
+    leptet(0.7);
+  }
+}
+
+// ------------------------------------------------------------ kirajzolás, felület
+$('alcim').textContent = alcim;
+// ?kam=x,y,z[,cx,cy,cz] — kamera felülírása (pl. oldalnézet az ülés ellenőrzéséhez)
+if (Q.get('kam')) { const k = Q.get('kam').split(',').map(Number); nezo(k[0], k[1], k[2], k[3] ?? kozep.x, k[4] ?? kozep.y, k[5] ?? kozep.z); }
+renderer.render(scene, cam);
+if (nezet !== 'pislog' && nezet !== 'tablo' && nezet !== 'tomeg' && nezet !== 'meres') cimkez();
+const ri = renderer.info.render;
+$('meres').textContent = `rajzhívás ${ri.calls} · háromszög ${ri.triangles.toLocaleString('hu')}\nfigura ${figurak.length}`;
+window.__info = Object.keys(info).length ? info : { rajzhivas: ri.calls, haromszog: ri.triangles, figura: figurak.length };
+window.__jelenet = { scene, figurak, camera: cam };
+window.__kesz = true;
+
+if (!TESZT) {
+  // interaktív: animációgombok, nézetek, egérrel forgatás
+  const g = $('gombok');
+  const gomb = (t, fn, on) => { const b = document.createElement('button'); b.textContent = t; if (on) b.className = 'on'; b.onclick = fn; g.appendChild(b); return b; };
+  for (const [t, q] of [['tabló', 'nezet=tablo'], ['közeli', 'nezet=kozeli&lap=0'], ['testek', 'nezet=testek'], ['sziluett', 'nezet=sziluett'], ['néz', 'nezet=nez'], ['pislog', 'nezet=pislog'], ['tömeg', 'nezet=tomeg']])
+    gomb(t, () => location.search = q, location.search.includes(q));
+  if (nezet === 'kozeli') for (let l = 0; l < Math.ceil(IDK.length / 10); l++) gomb(`${l + 1}. lap`, () => location.search = `nezet=kozeli&lap=${l}`, +(Q.get('lap') || 0) === l);
+  g.appendChild(Object.assign(document.createElement('div'), { className: 'sep' }));
+  for (const a of ANIMOK) gomb(a, () => { for (const f of figurak) { f.anim(a); if (['iszik', 'koccint'].includes(a)) f.fog(kupica(), 'R'); else if (a === 'atad') f.fog(palinkasUveg(), 'R'); else f.elenged('R'); } });
+  let drag = null, yaw = Math.atan2(cam.position.x - kozep.x, cam.position.z - kozep.z), dist = cam.position.distanceTo(kozep), mag = cam.position.y - kozep.y;
+  addEventListener('pointerdown', e => { if (e.target.tagName !== 'BUTTON') drag = [e.clientX, e.clientY]; });
+  addEventListener('pointerup', () => drag = null);
+  addEventListener('pointermove', e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * 0.006; mag += (e.clientY - drag[1]) * 0.01; drag = [e.clientX, e.clientY]; });
+  addEventListener('wheel', e => { dist *= Math.exp(e.deltaY * 0.001); });
+  addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+  const clock = new THREE.Clock(); let fpsT = 0, fpsN = 0;
+  renderer.setAnimationLoop(() => {
+    const dt = Math.min(0.05, clock.getDelta());
+    const h = Math.hypot(dist, 0) ;
+    cam.position.set(kozep.x + Math.sin(yaw) * Math.sqrt(Math.max(0.01, h * h - mag * mag)), kozep.y + mag, kozep.z + Math.cos(yaw) * Math.sqrt(Math.max(0.01, h * h - mag * mag)));
+    cam.lookAt(kozep);
+    for (const f of figurak) {
+      if (f.kor?.mozog) { f.kor.a += f.kor.v * dt / f.kor.r; f.obj.position.set(Math.cos(f.kor.a) * f.kor.r, 0, Math.sin(f.kor.a) * f.kor.r - 6); f.obj.rotation.y = -f.kor.a; }
+      f.update(dt);
+    }
+    renderer.render(scene, cam);
+    if (nezet !== 'tomeg') cimkez(nezet === 'pislog' ? 1.3 : -0.08);
+    fpsT += dt; fpsN++;
+    if (fpsT > 0.5) { $('meres').textContent = `${(fpsN / fpsT).toFixed(0)} fps · rajzhívás ${renderer.info.render.calls} · háromszög ${renderer.info.render.triangles.toLocaleString('hu')}\nfigura ${figurak.length}`; fpsT = 0; fpsN = 0; }
+  });
+}
+</script>
+</body>
+</html>

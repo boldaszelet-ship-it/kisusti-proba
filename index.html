@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kisüsti</title>
+<link rel="stylesheet" href="./ui.css">
+<link rel="stylesheet" href="./tortenet.css">
+<link rel="stylesheet" href="./coop.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0907; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #f3eee4; }
+  canvas { display: block; }
+  /* célkereszt, 3D-feliratok */
+  #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff; box-shadow: 0 0 3px #000; opacity: .85; pointer-events: none; transition: transform .08s ease-out, opacity .2s; }
+  #cross.cel { transform: scale(1.7); background: #ffd88a; }
+  body.modal #cross, body.modal #labels { opacity: 0; }
+  .lbl { position: fixed; transform: translate(-50%, -100%); white-space: pre; text-align: center; font-weight: 600; color: #fff; text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 2px #000; pointer-events: none; line-height: 1.25; }
+  #labels { transition: opacity .2s; }
+  /* az üst panelje */
+  #ust { position: fixed; right: 24px; top: 50%; width: 420px; transform: translate(30px, -50%); opacity: 0; pointer-events: none; transition: opacity .18s ease-out, transform .22s cubic-bezier(.2,.8,.3,1);
+    background: linear-gradient(180deg, rgba(38,26,17,.92), rgba(24,17,12,.92)); border: 1px solid rgba(232,165,74,.35); border-radius: 14px; padding: 16px 18px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.5); font-size: 15px; }
+  #ust.be { opacity: 1; transform: translate(0, -50%); }
+  #ust h3 { margin: 0; font: 600 13px/1 system-ui; letter-spacing: .18em; color: #e8a54a; }
+  #ust .cim { font: 600 21px Georgia, serif; margin: 4px 0 12px; }
+  #ust .sor { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 5px; color: #d8cdb8; }
+  #ust .sor b { font: 700 26px/1 Georgia, serif; color: #fff; font-variant-numeric: tabular-nums; }
+  #ust .sav { position: relative; height: 18px; background: #2b2420; border-radius: 9px; overflow: hidden; box-shadow: inset 0 1px 3px #000; }
+  #ust .sav i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 9px; transition: width .1s linear, background .3s; }
+  #ust-ho-i.hideg { background: linear-gradient(90deg, #2f5fa8, #5b8fe0); } #ust-ho-i.jo { background: linear-gradient(90deg, #3c8a3c, #6fd06f); } #ust-ho-i.forro { background: linear-gradient(90deg, #b8401f, #ff6a3a); }
+  #ust-sav { position: absolute; top: -2px; bottom: -2px; border: 2px solid rgba(255,255,255,.75); border-radius: 4px; pointer-events: none; }
+  #ust-tuz-i { background: linear-gradient(90deg, #7a2a10, #ff8a2a); }
+  #ust .fazisok { position: relative; display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin-top: 4px; font: 600 11px/22px system-ui; letter-spacing: .06em; text-align: center; }
+  #ust .fazisok span { overflow: hidden; white-space: nowrap; }
+  #ust-elo { background: #6a3a2a; } #ust-kozep { background: #3f6a32; } #ust .fazisok .uto { flex: 1; background: #5a4a30; }
+  #ust-p { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px #fff; transition: left .1s linear; }
+  #ust .edeny { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
+  #ust-edeny { font: 700 15px/1 system-ui; letter-spacing: .12em; padding: 8px 12px; border-radius: 8px; background: #6a3a2a; }
+  #ust-edeny[data-e="sziv"] { background: #3f8a32; } #ust-edeny[data-e="uto"] { background: #5a4a30; }
+  #ust-edeny.villan { animation: villan .35s ease-out; }
+  @keyframes villan { 0% { transform: scale(1.25); box-shadow: 0 0 22px #ffd88a; } 100% { transform: scale(1); box-shadow: none; } }
+  #ust-termek { color: #f0e2c4; font-variant-numeric: tabular-nums; }
+  #ust-tipp { margin-top: 12px; font: 600 17px Georgia, serif; color: #ffd88a; min-height: 22px; }
+  #ust-tipp.surgos { color: #ff9a6a; animation: lukt 0.7s ease-in-out infinite alternate; }
+  @keyframes lukt { from { opacity: 1; } to { opacity: .55; } }
+  #ust .bill { margin-top: 10px; font-size: 13px; opacity: .75; } #ust kbd, #busz kbd { font: 600 12px system-ui; padding: 1px 6px; border: 1px solid #8a7a62; border-radius: 4px; }
+  /* busz */
+  #busz { position: fixed; left: 50%; top: 50%; width: 460px; transform: translate(-50%, -46%); opacity: 0; pointer-events: none; transition: opacity .16s ease-out, transform .2s cubic-bezier(.2,.8,.3,1);
+    background: linear-gradient(180deg, rgba(31,58,42,.95), rgba(18,32,24,.95)); border: 1px solid rgba(160,220,170,.3); border-radius: 14px; padding: 16px 18px; box-shadow: 0 10px 40px rgba(0,0,0,.55); }
+  #busz.be { opacity: 1; transform: translate(-50%, -50%); pointer-events: auto; }
+  #busz h3 { margin: 0 0 4px; font: 600 20px Georgia, serif; } #busz .b-al { font-size: 13px; opacity: .75; margin-bottom: 10px; }
+  #busz button { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; width: 100%; margin: 5px 0; padding: 10px 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: rgba(255,255,255,.06); color: inherit; font: 15px system-ui; text-align: left; cursor: pointer; transition: background .12s; }
+  #busz button:hover:not([disabled]) { background: rgba(255,255,255,.16); } #busz button[disabled] { opacity: .45; cursor: default; }
+  #busz button b { font: 700 18px Georgia, serif; color: #bfe8c8; } #busz small { opacity: .8; }
+  /* jelenet-felirat (motozás, házkutatás), elsötétítés */
+  #jelenet { position: fixed; left: 0; right: 0; top: 16%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .25s; text-shadow: 0 2px 6px #000, 0 0 18px #000; }
+  #jelenet.be { opacity: 1; }
+  #jelenet h2 { margin: 0; font: 700 54px Georgia, serif; letter-spacing: .14em; color: #ffcf6a; }
+  #jelenet p { margin: 8px auto 0; max-width: 900px; font: 22px Georgia, serif; }
+  #elsot { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .28s ease-in-out; }
+  #elsot.be { opacity: 1; }
+  /* kezdőképernyő */
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 40%, #3a2416 0%, #1a110b 55%, #0d0907 100%); text-align: center; z-index: 50; transition: opacity .5s; }
+  #start.ki { opacity: 0; pointer-events: none; }
+  #start h1 { font: 700 96px Georgia, serif; margin: 0; letter-spacing: .08em; color: #e8a54a; text-shadow: 0 5px 0 #5a2c10, 0 12px 30px rgba(0,0,0,.6); }
+  #start .al { font: italic 24px Georgia, serif; margin: 12px 0 34px; opacity: .9; }
+  #start .tolt { width: 340px; } #start .tolt .s { height: 5px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; } #start .tolt i { display: block; height: 100%; width: 0; background: #e8a54a; transition: width .15s; }
+  #start .tolt .f { font-size: 13px; opacity: .6; margin-top: 8px; }
+  #start .gombok { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  #start .gombok[hidden] { display: none; }
+  #start button { min-width: 300px; font: 600 20px Georgia, serif; color: #f3eee4; padding: 12px 28px; border: 2px solid #e8a54a; border-radius: 30px; background: rgba(232,165,74,.08); cursor: pointer; transition: background .15s, transform .1s; }
+  #start button:hover, #start button:focus-visible { background: rgba(232,165,74,.25); outline: none; transform: scale(1.03); }
+  #start button small { display: block; font: 13px system-ui; opacity: .75; margin-top: 3px; }
+  #start button.halk { border-color: rgba(232,165,74,.45); font-size: 17px; }
+  #start .disc { position: absolute; bottom: 24px; font-size: 14px; opacity: .7; max-width: 760px; line-height: 1.5; }
+  #start .disc b { color: #e8a54a; letter-spacing: .08em; }
+  #start .bill { position: absolute; bottom: 86px; font-size: 13px; opacity: .55; }
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<div id="labels"></div>
+<div id="cross"></div>
+<div id="ust" aria-live="polite">
+  <h3>AZ ÜST</h3>
+  <div class="cim" id="ust-cim"></div>
+  <div class="sor"><span>Hőfok <small>(jó: 88–94 °C)</small></span><b id="ust-hofok">20 °C</b></div>
+  <div class="sav"><i id="ust-ho-i"></i><s id="ust-sav"></s></div>
+  <div class="sor"><span>Tűz</span><span id="ust-tuz">0 %</span></div>
+  <div class="sav" style="height:10px"><i id="ust-tuz-i"></i></div>
+  <div class="sor"><span id="ust-fazis">Most jön: előpárlat</span></div>
+  <div class="fazisok"><span id="ust-elo">ELŐ</span><span id="ust-kozep">KÖZÉPPÁRLAT</span><span class="uto">UTÓ</span><i id="ust-p"></i></div>
+  <div class="edeny"><span>Edény</span><span id="ust-edeny" data-e="elo">MOSLÉK</span><span id="ust-termek"></span></div>
+  <div id="ust-tipp"></div>
+  <div class="bill"><kbd>W</kbd>/<kbd>S</kbd> tűz · <kbd>SPACE</kbd> vágás · <kbd>Q</kbd> tűz eloltása · <kbd>E</kbd> vissza</div>
+</div>
+<div id="busz"></div>
+<div id="jelenet"><h2></h2><p></p></div>
+<div id="elsot"></div>
+<div id="start">
+  <h1>KISÜSTI</h1>
+  <div class="al">Nagyapád üstje. A falu szomja. A pénzügyőr türelme.</div>
+  <div class="tolt"><div class="s"><i id="tolt-i"></i></div><div class="f" id="tolt-f">A falu ébredezik…</div></div>
+  <div class="gombok" hidden>
+    <button id="folytatas" hidden>Folytatás<small id="folytatas-al"></small></button>
+    <button id="uj">Új játék</button>
+    <button id="kozos" class="halk">Közös játék<small>2–4 fő, szobakóddal</small></button>
+  </div>
+  <div class="bill">WASD · egér · E használat · Tab telefon · Esc szünet</div>
+  <div class="disc"><b>18+ · SZATÍRA</b> · Kitalált falu, kitalált szereplők. A játék a magyar ivási szokásokat figurázza ki, nem az ivást ajánlja. Az otthoni pálinkafőzést törvény szabályozza.</div>
+</div>
+<script type="module" src="./js/jatek.js"></script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Kisüsti – hangpróba</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#1d1813; --lap:#2a221b; --szel:#4a3b2c; --szoveg:#efe3cf; --halv:#b8a68c; --rez:#d08a3a; --zold:#8fb36b; --piros:#d0644a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--szoveg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 18px 24px 8px; border-bottom: 1px solid var(--szel); display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; color: var(--rez); }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--rez); text-transform: uppercase; letter-spacing: .06em; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; padding: 16px 24px 40px; }
+  section { background: var(--lap); border: 1px solid var(--szel); border-radius: 10px; padding: 14px 16px; }
+  .gombok { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { background: #3a2f24; color: var(--szoveg); border: 1px solid var(--szel); border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--rez); }
+  button.be { background: var(--rez); color: #1d1813; border-color: var(--rez); }
+  .kat { color: var(--halv); font-size: 12px; margin: 10px 0 4px; }
+  .sor { display: grid; grid-template-columns: 150px 1fr 48px; gap: 8px; align-items: center; margin: 4px 0; }
+  .sor span:last-child { text-align: right; color: var(--halv); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--rez); }
+  select { background: #3a2f24; color: var(--szoveg); border: 1px solid var(--szel); border-radius: 6px; padding: 4px 6px; font: inherit; }
+  .hurok { border-top: 1px dashed var(--szel); padding-top: 8px; margin-top: 8px; }
+  .hurok:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  td, th { padding: 3px 6px; border-bottom: 1px solid var(--szel); text-align: right; }
+  td:first-child, th:first-child { text-align: left; }
+  .ok { color: var(--zold); } .rossz { color: var(--piros); }
+  #allapot { color: var(--halv); }
+  .szeles { grid-column: 1 / -1; }
+  img.spektro { width: 100%; border-radius: 6px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kisüsti – hangpróba</h1>
+  <button id="indit" class="be">Hang bekapcsolása</button>
+  <label>Fő hangerő <input id="master" type="range" min="0" max="1" step="0.01" value="0.8" style="width:160px"></label>
+  <label><input id="nema" type="checkbox"> Némítás</label>
+  <span id="allapot">A böngésző csak kattintás után enged hangot.</span>
+</header>
+<main>
+  <section id="egyszeri"><h2>Egyszeri hangok</h2></section>
+  <section id="lepesek"><h2>Lépések (külön meghallgatandó)</h2>
+    <p class="kat">Egy lépés, illetve 8 lépéses séta 0,52 s-os lépésközzel. Minden lépés más változat.</p>
+    <div class="gombok" id="lepesgombok"></div>
+  </section>
+  <section id="hurkok"><h2>Hurkok</h2></section>
+  <section id="kornyezet"><h2>Környezet</h2>
+    <div class="gombok" style="margin-bottom:8px"><button id="ambBe">Környezet be</button><button id="ambKi">Környezet ki</button></div>
+    <div class="sor"><label>Napszak</label><input id="napszak" type="range" min="0" max="1" step="0.001" value="0.5"><span id="ora">12:00</span></div>
+    <div class="sor"><label>Régió</label><select id="regio"><option value="tanya">Nagyapa tanyája</option><option value="falu">Kisüstfalva</option><option value="felveg">Felvég</option><option value="szolohegy">Szőlőhegy</option><option value="major">A régi major</option><option value="kisvaros">Kisváros</option></select><span></span></div>
+    <div class="sor"><label>Hallgató helye</label><select id="hely"><option value="0,1.7,0">a tanya udvara</option><option value="214,1.7,12">a kocsma előtt</option><option value="232,1.7,30">a templom alatt</option></select><span></span></div>
+    <div class="sor"><label>Eső</label><input id="eso" type="checkbox"><span></span></div>
+    <p class="kat">Keverő (rétegszorzó; mellette az aktuális szint)</p>
+    <div id="kevero"></div>
+  </section>
+  <section><h2>Jelenetek és térbeli próba</h2>
+    <div class="gombok">
+      <button id="penzugyor">A pénzügyőr megérkezik</button>
+      <button id="korbe">Tűz körbejár (HRTF)</button>
+      <button id="orautes">Toronyóra üt (3 óra)</button>
+    </div>
+    <p class="kat">Fejhallgatóval: a körbejáró tűz elöl–jobbra–hátul–balra halad, 4 m-re a hallgatótól. A pénzügyőr autója balról, a Fő úton közeledik.</p>
+  </section>
+  <section class="szeles"><h2>Mérés (OfflineAudioContext)</h2>
+    <div class="gombok"><button id="mer">Mérés futtatása itt</button></div>
+    <p class="kat">Ugyanaz, amit a <code>tools/hang_meres.py</code> futtat: csúcs, RMS, 100 ms-os csúcs-RMS, spektrum-súlypont, tonalitás, magas zajpadló, kattanás.</p>
+    <div id="meresKi"></div>
+  </section>
+</main>
+<script type="module">
+import { Hang } from './js/hang.js';
+
+const H = new Hang();
+const $ = id => document.getElementById(id);
+const info = Hang.ids();
+const KAT = { ui: 'Kezelőfelület', foley: 'Tárgyak, üst, pénz', lepes: 'Lépések', jarmu: 'Járművek', jelzes: 'Jelzések', kornyezet: 'Környezet' };
+
+// ── egyszeri hangok ──
+const egy = $('egyszeri');
+for (const [k, nev] of Object.entries(KAT)) {
+  if (k === 'lepes') continue;
+  const lista = info.egyszeri.filter(e => e.cat === k); if (!lista.length) continue;
+  const p = document.createElement('p'); p.className = 'kat'; p.textContent = nev; egy.appendChild(p);
+  const d = document.createElement('div'); d.className = 'gombok'; egy.appendChild(d);
+  for (const e of lista) { const b = document.createElement('button'); b.textContent = e.nev; b.onclick = () => H.play(e.id); d.appendChild(b); }
+}
+// ── lépések ──
+const FEL = [['fu', 'fű'], ['fold', 'föld'], ['aszfalt', 'aszfalt'], ['fa', 'fapadló']];
+for (const [s, nev] of FEL) {
+  const b1 = document.createElement('button'); b1.textContent = `1 lépés – ${nev}`; b1.onclick = () => H.lepes(s);
+  const b2 = document.createElement('button'); b2.textContent = `séta – ${nev}`;
+  b2.onclick = () => { const t = H.now() + 0.05; for (let k = 0; k < 8; k++) H.play('lepes_' + s, { when: t + k * 0.52 }); };
+  $('lepesgombok').append(b1, b2);
+}
+// ── hurkok ──
+const hk = $('hurkok'), aktiv = {};
+for (const l of info.hurok) {
+  const box = document.createElement('div'); box.className = 'hurok'; hk.appendChild(box);
+  const b = document.createElement('button'); b.textContent = l.nev; box.appendChild(b);
+  const ertek = { vol: 1 };
+  const csuszka = (k, nev, def, step = 0.01, max = 1) => {
+    ertek[k] = def;
+    const s = document.createElement('div'); s.className = 'sor';
+    s.innerHTML = `<label>${nev}</label><input type="range" min="0" max="${max}" step="${step}" value="${def}"><span>${def}</span>`;
+    const inp = s.querySelector('input'), out = s.querySelector('span');
+    inp.oninput = () => { ertek[k] = +inp.value; out.textContent = (+inp.value).toFixed(2); if (aktiv[l.id]) aktiv[l.id].set({ [k]: +inp.value }); };
+    box.appendChild(s);
+  };
+  for (const p of l.params) csuszka(p.k, p.nev, p.def, p.step || 0.01);
+  csuszka('vol', 'Hangerő', 1, 0.01, 1.5);
+  b.onclick = () => {
+    if (aktiv[l.id]) { aktiv[l.id].stop(); delete aktiv[l.id]; b.classList.remove('be'); return; }
+    if (l.id === 'motor_kisauto') H.play('kisauto_indit');
+    aktiv[l.id] = H.loop(l.id, { ...ertek, ...(l.id === 'bicikli' ? { teker: !!ertek.teker } : {}) }); b.classList.add('be');
+  };
+}
+// ── környezet ──
+const kev = $('kevero'), szintSpan = {};
+for (const r of info.retegek) {
+  const s = document.createElement('div'); s.className = 'sor';
+  s.innerHTML = `<label>${r.nev}</label><input type="range" min="0" max="2" step="0.01" value="1"><span>–</span>`;
+  s.querySelector('input').oninput = e => H.ambientMix({ [r.id]: +e.target.value });
+  szintSpan[r.id] = s.querySelector('span'); kev.appendChild(s);
+}
+const fakeCam = (x, y, z) => ({ matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1] } });
+const helyAt = () => { const [x, y, z] = $('hely').value.split(',').map(Number); H.listener(fakeCam(x, y, z)); };
+let ambOn = false;
+const ambFrissit = () => {
+  const n = +$('napszak').value, perc = Math.round(n * 1440) % 1440;
+  $('ora').textContent = `${String(Math.floor(perc / 60)).padStart(2, '0')}:${String(perc % 60).padStart(2, '0')}`;
+  if (ambOn) H.ambient({ napszak: n, regio: $('regio').value, eso: $('eso').checked });
+};
+$('ambBe').onclick = () => { ambOn = true; helyAt(); ambFrissit(); };
+$('ambKi').onclick = () => { ambOn = false; H.ambientStop(); };
+for (const id of ['napszak', 'regio', 'eso']) $(id).oninput = ambFrissit;
+$('regio').onchange = ambFrissit; $('hely').onchange = helyAt;
+setInterval(() => { const lv = H.ambientSzintek(); for (const k in szintSpan) szintSpan[k].textContent = lv[k] != null ? lv[k].toFixed(2) : '–'; }, 300);
+// ── jelenetek ──
+$('penzugyor').onclick = () => { H.listener(fakeCam(0, 1.7, 8)); H.jelenet('penzugyor', { pos: [0, 0.7, 17.5] }); };
+let kor = null;
+$('korbe').onclick = () => {
+  if (kor) { clearInterval(kor.iv); kor.h.stop(); kor = null; $('korbe').classList.remove('be'); return; }
+  H.listener(fakeCam(0, 1.7, 0));
+  const pos = { x: 0, y: 1.2, z: -4 }, t0 = performance.now();
+  const h = H.loop('tuz', { pos, ero: 0.7 });
+  const iv = setInterval(() => { const a = (performance.now() - t0) / 1000 * TAU / 10; pos.x = 4 * Math.sin(a); pos.z = -4 * Math.cos(a); }, 30);
+  kor = { h, iv }; $('korbe').classList.add('be');
+};
+const TAU = Math.PI * 2;
+$('orautes').onclick = () => { ambOn = true; $('napszak').value = 2.97 / 24; helyAt(); ambFrissit(); setTimeout(() => { $('napszak').value = 3.02 / 24; ambFrissit(); }, 400); };
+// ── fő vezérlők ──
+$('indit').onclick = async () => { const ok = await H.unlock(); H.master(+$('master').value); $('allapot').textContent = ok ? 'Hang bekapcsolva.' : 'A hangot a böngésző nem engedte.'; $('indit').classList.remove('be'); };
+$('master').oninput = e => H.master(+e.target.value);
+$('nema').onchange = e => H.mute(e.target.checked);
+
+// ───────────────── mérés ─────────────────
+function fft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -TAU / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2, tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+        const ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr;
+      }
+    }
+  }
+}
+const db = v => 20 * Math.log10(Math.max(v, 1e-12));
+function stft(x, sr, N, hop, cb) {
+  const win = new Float32Array(N); let ws = 0; for (let i = 0; i < N; i++) { win[i] = 0.5 - 0.5 * Math.cos(TAU * i / N); ws += win[i]; }
+  const re = new Float64Array(N), im = new Float64Array(N), mag = new Float64Array(N / 2);
+  for (let s = 0; s + N <= x.length; s += hop) {
+    for (let i = 0; i < N; i++) { re[i] = x[s + i] * win[i]; im[i] = 0; }
+    fft(re, im);
+    for (let k = 0; k < N / 2; k++) mag[k] = Math.hypot(re[k], im[k]) * 2 / ws;   // szinusz amplitúdója
+    cb(mag, s);
+  }
+}
+function metrics(buf, spec) {
+  const sr = buf.sampleRate, L = buf.getChannelData(0), R = buf.getChannelData(1), s0 = Math.floor((spec.skip || 0) * sr);
+  const n = L.length - s0, x = new Float32Array(n);
+  let peak = 0;
+  for (let i = 0; i < L.length; i++) peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i]));
+  for (let i = 0; i < n; i++) x[i] = 0.5 * (L[i + s0] + R[i + s0]);
+  let ss = 0; for (let i = 0; i < n; i++) ss += x[i] * x[i];
+  const w = Math.round(0.1 * sr); let s = 0, best = 0;
+  for (let i = 0; i < n; i++) { s += x[i] * x[i]; if (i >= w) s -= x[i - w] * x[i - w]; if (s > best) best = s; }
+  // spektrum: súlypont, tonalitás (csúcs/medián 300–8000 Hz), magas zajpadló (6–16 kHz, 10. percentilis)
+  const N = 2048, P = new Float64Array(N / 2), hf = []; let num = 0, den = 0;
+  stft(x, sr, N, 1024, mag => {
+    let e = 0, h = 0;
+    for (let k = 1; k < N / 2; k++) { const f = k * sr / N, m2 = mag[k] * mag[k]; P[k] += m2; num += f * m2; den += m2; e += m2; if (f >= 6000 && f <= 16000) h += m2; }
+    hf.push(db(Math.sqrt(h / 2)));
+  });
+  const band = []; for (let k = 1; k < N / 2; k++) { const f = k * sr / N; if (f >= 300 && f <= 8000) band.push(P[k]); }
+  band.sort((a, b) => a - b);
+  const tonus = band.length ? 10 * Math.log10(band[band.length - 1] / Math.max(band[Math.floor(band.length / 2)], 1e-30)) : 0;
+  hf.sort((a, b) => a - b);
+  // kattanás: az első különbség kiugrása a környező ±10 ms különbség-RMS-éhez képest
+  let klikk = 0;
+  if (spec.folyamatos) {
+    const d2 = new Float64Array(n + 1); for (let i = 1; i < n; i++) { const d = x[i] - x[i - 1]; d2[i + 1] = d2[i] + d * d; }
+    const r = Math.round(0.01 * sr);
+    for (let i = r + 1; i < n - r; i++) {
+      const d = Math.abs(x[i] - x[i - 1]); if (d < 0.05) continue;
+      const loc = Math.sqrt((d2[i + r] - d2[i - r]) / (2 * r));
+      if (d > 10 * loc) { klikk++; i += r; }
+    }
+  }
+  return {
+    csucs_db: +db(peak).toFixed(2), rms_db: +db(Math.sqrt(ss / Math.max(1, n))).toFixed(2), max100_db: +db(Math.sqrt(best / w)).toFixed(2),
+    sulypont_hz: Math.round(den > 0 ? num / den : 0), tonus_db: +tonus.toFixed(1), hf10_db: hf.length ? +hf[Math.floor(hf.length * 0.1)].toFixed(1) : -200, klikk,
+  };
+}
+function spektrogram(buf, spec) {
+  const sr = buf.sampleRate, L = buf.getChannelData(0), R = buf.getChannelData(1), n = L.length, x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = 0.5 * (L[i] + R[i]);
+  const N = 2048, hop = Math.max(128, Math.ceil(n / 1100)), cols = [];
+  stft(x, sr, N, hop, mag => cols.push(Float32Array.from(mag)));
+  const W = Math.max(1, cols.length), Hh = 320, top = 26, left = 46, cv = document.createElement('canvas');
+  cv.width = W + left + 8; cv.height = Hh + top + 22;
+  const g = cv.getContext('2d'); g.fillStyle = '#120e0a'; g.fillRect(0, 0, cv.width, cv.height);
+  const img = g.createImageData(W, Hh), f0 = 30, f1 = 20000;
+  const pal = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
+  const col = v => { const u = Math.max(0, Math.min(1, v)) * (pal.length - 1), i = Math.floor(u), t = u - i, a = pal[i], b = pal[Math.min(pal.length - 1, i + 1)]; return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; };
+  for (let y = 0; y < Hh; y++) {
+    const fa = f0 * Math.pow(f1 / f0, 1 - (y + 1) / Hh), fb = f0 * Math.pow(f1 / f0, 1 - y / Hh);
+    const ka = Math.max(1, Math.floor(fa * N / sr)), kb = Math.min(N / 2 - 1, Math.max(ka, Math.ceil(fb * N / sr)));
+    for (let c = 0; c < W; c++) {
+      let m = 0; for (let k = ka; k <= kb; k++) m = Math.max(m, cols[c][k]);
+      const [r, gg, b] = col((db(m) + 100) / 90), o = (y * W + c) * 4;
+      img.data[o] = r; img.data[o + 1] = gg; img.data[o + 2] = b; img.data[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, left, top);
+  g.fillStyle = '#efe3cf'; g.font = '13px system-ui, sans-serif';
+  g.fillText(`${spec.nev}  —  ${(n / sr).toFixed(1)} s, -100…-10 dBFS, log. frekvencia`, left, 17);
+  g.font = '11px system-ui, sans-serif';
+  for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) {
+    const y = top + Hh * (1 - Math.log(f / f0) / Math.log(f1 / f0));
+    g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), 6, y + 4); g.fillRect(left - 5, y, 4, 1);
+  }
+  for (let s = 0; s <= n / sr; s += 1) { const xx = left + s * sr / hop; g.fillText(`${s}`, xx - 3, top + Hh + 15); g.fillRect(xx, top + Hh, 1, 4); }
+  return cv.toDataURL('image/png');
+}
+function wav16(buf) {
+  const n = buf.length, ch = buf.numberOfChannels, sr = buf.sampleRate, bytes = 44 + n * ch * 2, a = new ArrayBuffer(bytes), v = new DataView(a);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, bytes - 8, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, ch, true); v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * ch * 2, true);
+  const d = []; for (let c = 0; c < ch; c++) d.push(buf.getChannelData(c));
+  let o = 44; for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { const s = Math.max(-1, Math.min(1, d[c][i])); v.setInt16(o, Math.round(s * 32767), true); o += 2; }
+  const u8 = new Uint8Array(a); let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+window.hangKatalogus = () => Hang.katalogus();
+window.hangVarratok = () => Hang.varratok();
+window.hangVegek = () => Hang.vegek();
+window.hangMeres = async (spec, o = {}) => {
+  const t = performance.now(), buf = await Hang.render(spec);
+  const m = metrics(buf, spec);
+  return { m, ms: Math.round(performance.now() - t), wav: o.wav === false ? null : wav16(buf), png: spec.spektro ? spektrogram(buf, spec) : null };
+};
+
+$('mer').onclick = async () => {
+  const ki = $('meresKi'); ki.innerHTML = '<p class="kat">Fut…</p>';
+  const kat = Hang.katalogus(), sorok = [];
+  const tbl = document.createElement('table');
+  tbl.innerHTML = '<tr><th>hang</th><th>csúcs dBFS</th><th>RMS</th><th>max 100 ms</th><th>súlypont Hz</th><th>tónus dB</th><th>HF10 dB</th><th>kattanás</th><th></th></tr>';
+  ki.innerHTML = ''; ki.appendChild(tbl);
+  for (const spec of kat) {
+    const r = await window.hangMeres(spec, { wav: false });
+    const tr = document.createElement('tr'), m = r.m, okc = m.csucs_db <= -1 ? 'ok' : 'rossz';
+    tr.innerHTML = `<td>${spec.nev}</td><td class="${okc}">${m.csucs_db}</td><td>${m.rms_db}</td><td>${m.max100_db}</td><td>${m.sulypont_hz}</td><td>${m.tonus_db}</td><td>${m.hf10_db}</td><td class="${m.klikk ? 'rossz' : 'ok'}">${spec.folyamatos ? m.klikk : '–'}</td><td></td>`;
+    if (r.png) { const b = document.createElement('button'); b.textContent = 'kép'; b.onclick = () => { const im = document.createElement('img'); im.className = 'spektro'; im.src = r.png; ki.appendChild(im); }; tr.lastChild.appendChild(b); }
+    tbl.appendChild(tr); sorok.push(r);
+  }
+};
+window.__hangKesz = true;
+</script>
+</body>
+</html>

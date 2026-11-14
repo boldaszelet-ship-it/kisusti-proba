@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kisüsti — UI-próba</title>
+<link rel="stylesheet" href="./ui.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0907; font-family: system-ui, sans-serif; }
+  #hatter { position: fixed; inset: 0; background-size: cover; background-position: center; }
+  #kereszt { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff; box-shadow: 0 0 3px #000; opacity: .85; }
+  #pult { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 100; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 62vw;
+    padding: 6px 8px; background: rgba(10,10,14,.86); border: 1px solid #555; border-radius: 8px; font: 13px system-ui; color: #ddd; }
+  #pult button { font: 13px system-ui; padding: 3px 7px; background: #2a2a33; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
+  #pult button.on { background: #6a4a1a; border-color: #e0a050; }
+  #pult b { align-self: center; color: #e0a050; margin: 0 4px; }
+  body.tiszta #pult { display: none; }
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
+</head>
+<body>
+<div id="hatter"></div>
+<div id="kereszt"></div>
+<div id="pult"></div>
+<script type="module">
+// Próbaoldal: 3D nélkül, valódi Empire alatt. ?forg=kezdo|kozep|ures · ?hatter=1..7 · ?tiszta=1 (nincs pult) · ?seb=0|1|10|60 · ?hang=0
+import { UI } from './js/ui/ui.js';
+import { forgatokonyv, megfeleloTetel } from './js/ui/proba.js';
+import { Hang } from './js/hang.js';
+const Q = new URLSearchParams(location.search);
+window.__hibak = [];
+addEventListener('error', e => window.__hibak.push(String(e.message)));
+addEventListener('unhandledrejection', e => window.__hibak.push(String(e.reason)));
+const HATTEREK = ['vilag/01_tanya', 'vilag/02_falu_kozepe', 'vilag/03_piacter', 'vilag/05_szolohegy_kilatas', 'vilag/06_major', 'vilag/07b_kisvaros_foter', 'vilag/08_ejjeli_falu'];
+const hatter = n => document.getElementById('hatter').style.backgroundImage = `url(../captures/${HATTEREK[(n - 1) % HATTEREK.length]}.png)`;
+hatter(+(Q.get('hatter') || 1));
+if (Q.has('tiszta')) document.body.classList.add('tiszta');
+
+let seb = +(Q.get('seb') ?? 1);
+const hang = Q.get('hang') === '0' ? null : new Hang();
+addEventListener('pointerdown', () => hang?.unlock(), { once: true });
+addEventListener('keydown', () => hang?.unlock(), { once: true });
+let E = forgatokonyv(Q.get('forg') || 'kozep');
+const ui = new UI(E, { hang, onLoad: E2 => { E = E2; }, onQuit: () => location.reload() });
+ui.setPlayer(...(Q.get('pos') ? Q.get('pos').split(',').map(Number) : [6, 14]));
+
+const pult = document.getElementById('pult');
+const gomb = (t, f, cls = '') => { const b = document.createElement('button'); b.textContent = t; b.className = cls; b.onclick = () => { f(b); b.blur(); }; pult.appendChild(b); return b; };
+const cim = t => { const b = document.createElement('b'); b.textContent = t; pult.appendChild(b); };
+cim('idő');
+const sg = [0, 1, 10, 60].map(v => gomb(v ? '×' + v : 'áll', () => { seb = v; sg.forEach((x, i) => x.classList.toggle('on', [0, 1, 10, 60][i] === v)); }, v === seb ? 'on' : ''));
+cim('képernyő');
+for (const [t, n, a] of [['telefon', 'telefon'], ['kever', 'kever', { prop: 'tanya' }], ['palack', 'palack', { prop: 'tanya' }], ['kert', 'gyumolcsos', { prop: 'tanya' }], ['hordó', 'hordo', { prop: 'tanya' }],
+  ['térkép', 'terkep-nagy'], ['szünet', 'szunet']]) gomb(t, () => ui.open(n, a || {}));
+gomb('átadás', () => { const r = E.state.rendelesek[0]; if (!r) return; if (r.allapot === 'uj') E.acceptOrder(r.id); if (E.now() < r.ablak[0]) E.advance(r.ablak[0] - E.now() + 5); megfeleloTetel(E, r); ui.open('atadas', { rendeles: r.id }); });
+gomb('alvás', () => ui.alvas());
+cim('esemény');
+gomb('motozás', () => { E._ujTetel({ gyumolcs: 'szilva', l: 5, q: 70, fok: 50, hely: 'nalad' }); E.searchPlayer(); });
+gomb('házkutatás', () => { E._ujTetel({ gyumolcs: 'szilva', l: 6, q: 70, fok: 50, hely: 'prop:tanya' }); E.raid('tanya'); });
+gomb('rang', () => E.addXp(E.state.rang.kovetkezoXp - E.state.rang.xp + 1));
+gomb('háttér', () => hatter((window.__h = ((window.__h || 1) % 7) + 1)));
+
+let t0 = performance.now();
+function frame(t) {
+  const dt = Math.min(0.1, (t - t0) / 1000); t0 = t;
+  if (seb) E.step(dt * seb);
+  ui.update(dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.__proba = { get E() { return E; }, ui, forgatokonyv, megfeleloTetel, set seb(v) { seb = v; }, get seb() { return seb; }, hatter, ujE(n) { E = forgatokonyv(n); ui.setEmpire(E); return E; } };
+window.__kesz = true;
+</script>
+</body>
+</html>
